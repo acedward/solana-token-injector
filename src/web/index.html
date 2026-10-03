@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midnight Token Injector</title>
+<meta name="description" content="Register a Solana address with a Midnight viewing key; the RPC shows the shielded tokens received as Solana tokens.">
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --text: #15181d;
+    --muted: #5b6472;
+    --border: #d9dde3;
+    --accent: #3b4fd8;
+    --accent-text: #ffffff;
+    --warn-bg: #fff6db;
+    --warn-border: #e8c65a;
+    --warn-text: #5a4300;
+    --ok: #17803d;
+    --ok-bg: #e3f5e9;
+    --busy: #8a5a00;
+    --busy-bg: #fdf0d2;
+    --bad: #b42318;
+    --bad-bg: #fde7e5;
+    --idle: #5b6472;
+    --idle-bg: #eceef2;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --surface: #171a20;
+      --text: #e7eaf0;
+      --muted: #9aa3b2;
+      --border: #2b303a;
+      --accent: #7d8cff;
+      --accent-text: #0f1115;
+      --warn-bg: #2b2412;
+      --warn-border: #6b5617;
+      --warn-text: #f1d98a;
+      --ok: #5fd38a;
+      --ok-bg: #133222;
+      --busy: #f0c060;
+      --busy-bg: #33280f;
+      --bad: #ff8a80;
+      --bad-bg: #3a1714;
+      --idle: #9aa3b2;
+      --idle-bg: #252a33;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 0 0 12px; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  .banner {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    color: var(--warn-text);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 0 0 20px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin: 0 0 20px;
+  }
+  .rpc { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .rpc code {
+    font-family: var(--mono);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    overflow-wrap: anywhere;
+    flex: 1 1 260px;
+  }
+  .hint { color: var(--muted); font-size: 0.875rem; margin: 8px 0 0; }
+  form { display: grid; gap: 12px; }
+  label { display: grid; gap: 4px; font-weight: 600; font-size: 0.9rem; }
+  input[type=text] {
+    font: 14px var(--mono);
+    width: 100%;
+    padding: 9px 10px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    padding: 7px 12px;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); justify-self: start; padding: 9px 16px; }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: 0.6; cursor: default; }
+  .msg { min-height: 1.5em; margin: 0; }
+  .msg.error { color: var(--bad); }
+  .msg.ok { color: var(--ok); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 8px; border-top: 1px solid var(--border); }
+  th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); border-top: 0; }
+  .mono { font-family: var(--mono); font-size: 0.85rem; overflow-wrap: anywhere; }
+  .badge {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 1px 9px;
+    white-space: nowrap;
+  }
+  .badge.synced { color: var(--ok); background: var(--ok-bg); }
+  .badge.syncing { color: var(--busy); background: var(--busy-bg); }
+  .badge.connecting { color: var(--idle); background: var(--idle-bg); }
+  .badge.error { color: var(--bad); background: var(--bad-bg); }
+  .err { color: var(--bad); font-size: 0.82rem; margin-top: 4px; overflow-wrap: anywhere; }
+  .tokens { margin: 0; padding: 0; list-style: none; }
+  .tokens li { overflow-wrap: anywhere; }
+  .clamped { color: var(--busy); font-size: 0.82rem; }
+  .empty { color: var(--muted); padding: 16px 8px; }
+  .muted { color: var(--muted); }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 0.82rem; margin-top: 10px; }
+  @media (max-width: 720px) {
+    thead { display: none; }
+    table, tbody, tr, td { display: block; width: 100%; }
+    tr { border-top: 1px solid var(--border); padding: 10px 0; }
+    td { border: 0; padding: 3px 0; }
+    td::before { content: attr(data-label); display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    td.actions::before { content: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Midnight Token Injector</h1>
+  <p class="sub">Register a Solana address with a Midnight viewing key. Wallets that use this RPC see the shielded tokens received by that key as Solana tokens (display only). Midnight network: <strong id="network">{{NETWORK_ID}}</strong>.</p>
+
+  <p class="banner" id="banner" role="note"><strong>v1 — not private:</strong> the service stores viewing keys and shows what they reveal. Amounts are totals RECEIVED: a viewing key cannot see spends.</p>
+
+  <section class="card" aria-labelledby="rpc-h">
+    <h2 id="rpc-h">RPC URL for your wallet</h2>
+    <div class="rpc">
+      <code id="rpc-url">{{RPC_URL}}</code>
+      <button type="button" id="copy">Copy</button>
+    </div>
+    <p class="hint">Nightly: Developer Mode, then Custom Solana RPC. Backpack: Settings, Solana, RPC Connection, Custom (Backpack refuses local addresses; it needs a public HTTPS URL).</p>
+  </section>
+
+  <section class="card" aria-labelledby="reg-h">
+    <h2 id="reg-h">Register</h2>
+    <form id="form" novalidate>
+      <label>Solana wallet address
+        <input type="text" id="solanaAddress" name="solanaAddress" autocomplete="off" spellcheck="false" placeholder="e.g. 7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV" required>
+      </label>
+      <label>Midnight viewing key
+        <input type="text" id="viewingKey" name="viewingKey" autocomplete="off" spellcheck="false" placeholder="{{KEY_PREFIX}}…" required>
+      </label>
+      <button type="submit" class="primary" id="submit">Register</button>
+      <p class="msg" id="form-msg" role="alert" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="list-h">
+    <h2 id="list-h">Registrations</h2>
+    <table id="registrations">
+      <thead>
+        <tr><th>Solana address</th><th>Viewing key</th><th>Status</th><th>Tokens (received)</th><th>Created</th><th><span class="visually-hidden">Actions</span></th></tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+    </table>
+    <div class="foot"><span id="updated" aria-live="polite"></span><span>Refreshes every 3 s</span></div>
+  </section>
+</main>
+<script>
+(function () {
+  'use strict';
+  var REFRESH_MS = 3000;
+  var rows = document.getElementById('rows');
+  var form = document.getElementById('form');
+  var msg = document.getElementById('form-msg');
+  var updated = document.getElementById('updated');
+
+  function el(tag, attrs, children) {
+    var e = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === 'text') e.textContent = attrs[k];
+      else if (k === 'className') e.className = attrs[k];
+      else e.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) e.appendChild(c); });
+    return e;
+  }
+
+  function setMsg(text, kind) {
+    msg.textContent = text || '';
+    msg.className = 'msg' + (kind ? ' ' + kind : '');
+  }
+
+  function fmtDate(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? iso : d.toLocaleString();
+  }
+
+  // Display only: digit groups in the whole part ("250000000.5" -> "250,000,000.5").
+  function group(s) {
+    var parts = String(s).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
+  }
+
+  function tokenList(tokens) {
+    if (!tokens.length) return el('span', { className: 'muted', text: 'none yet' });
+    return el('ul', { className: 'tokens' }, tokens.map(function (t) {
+      var li = el('li', { text: t.name + ': ' + group(t.uiAmountString) + ' (' + t.symbol + ')' });
+      li.title = 'Exact: ' + t.uiAmountString + ' ' + t.symbol + ' (' + t.amount + ' base units)\nMidnight token type ' + t.tokenType + '\nSolana mint ' + t.mint;
+      if (t.clamped) li.appendChild(el('div', { className: 'clamped', text: 'Too large for an SPL amount: the wallet shows u64::MAX; exact total above.' }));
+      return li;
+    }));
+  }
+
+  function render(list) {
+    rows.textContent = '';
+    if (!list.length) {
+      rows.appendChild(el('tr', null, [el('td', { colspan: '6', className: 'empty', text: 'No registrations yet.' })]));
+      return;
+    }
+    list.forEach(function (r) {
+      var status = el('td', { 'data-label': 'Status' }, [el('span', { className: 'badge ' + r.status, text: r.status })]);
+      if (r.error) status.appendChild(el('div', { className: 'err', text: r.error }));
+      var del = el('button', { type: 'button', className: 'danger', text: 'Delete', 'aria-label': 'Delete registration ' + r.id });
+      del.addEventListener('click', function () { remove(r, del); });
+      rows.appendChild(el('tr', { 'data-id': r.id }, [
+        el('td', { 'data-label': 'Solana address', className: 'mono', text: r.solanaAddress }),
+        el('td', { 'data-label': 'Viewing key', className: 'mono', text: r.viewingKeyMasked }),
+        status,
+        el('td', { 'data-label': 'Tokens (received)' }, [tokenList(r.tokens || [])]),
+        el('td', { 'data-label': 'Created', text: fmtDate(r.createdAt) }),
+        el('td', { className: 'actions' }, [del])
+      ]));
+    });
+  }
+
+  function refresh() {
+    return fetch('/api/registrations', { cache: 'no-store' })
+      .then(function (res) { return res.json().then(function (body) { return { res: res, body: body }; }); })
+      .then(function (x) {
+        if (!x.res.ok) throw new Error(x.body && x.body.error ? x.body.error : 'HTTP ' + x.res.status);
+        render(x.body);
+        updated.textContent = 'Updated ' + new Date().toLocaleTimeString();
+      })
+      .catch(function (err) { updated.textContent = 'Could not load registrations: ' + err.message; });
+  }
+
+  function remove(r, button) {
+    if (!window.confirm('Delete the registration of ' + r.solanaAddress + '?')) return;
+    button.disabled = true;
+    fetch('/api/registrations/' + encodeURIComponent(r.id), { method: 'DELETE' })
+      .then(function (res) {
+        if (res.status !== 204 && res.status !== 404) throw new Error('HTTP ' + res.status);
+        return refresh();
+      })
+      .catch(function (err) { button.disabled = false; updated.textContent = 'Delete failed: ' + err.message; });
+  }
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var body = {
+      solanaAddress: document.getElementById('solanaAddress').value.trim(),
+      viewingKey: document.getElementById('viewingKey').value.trim()
+    };
+    if (!body.solanaAddress || !body.viewingKey) { setMsg('Both fields are required.', 'error'); return; }
+    var submit = document.getElementById('submit');
+    submit.disabled = true;
+    setMsg('Checking…');
+    fetch('/api/registrations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (res) { return res.json().then(function (j) { return { res: res, j: j }; }); })
+      .then(function (x) {
+        if (x.res.status === 201 || x.res.status === 200) {
+          setMsg(x.res.status === 201 ? 'Registered. Totals appear once the indexer has been read.' : 'Already registered.', 'ok');
+          document.getElementById('viewingKey').value = '';
+          return refresh();
+        }
+        setMsg(x.j && x.j.error ? x.j.error : 'Registration failed (HTTP ' + x.res.status + ').', 'error');
+      })
+      .catch(function (err) { setMsg('Service unreachable: ' + err.message, 'error'); })
+      .then(function () { submit.disabled = false; });
+  });
+
+  document.getElementById('copy').addEventListener('click', function () {
+    var text = document.getElementById('rpc-url').textContent;
+    var b = this;
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject(new Error('no clipboard')))
+      .then(function () { b.textContent = 'Copied'; }, function () { b.textContent = 'Select and copy'; })
+      .then(function () { setTimeout(function () { b.textContent = 'Copy'; }, 1500); });
+  });
+
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+})();
+</script>
+</body>
+</html>
