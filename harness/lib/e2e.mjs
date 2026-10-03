@@ -72,7 +72,7 @@ function chromePath() {
  * wait and leave stale keep-alive sockets behind), wait until the file exists with a stable size,
  * then kill Chrome's process group.
  */
-async function screenshot(url, file, { width = 1440, height = 2200, timeoutMs = 60_000 } = {}) {
+async function screenshot(url, file, { width = 1440, height = 1500, timeoutMs = 60_000 } = {}) {
   const chrome = chromePath();
   if (!chrome) throw new Error('no Chrome/Chromium found for the screenshot (set CHROME_BIN)');
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 's00056-chrome-'));

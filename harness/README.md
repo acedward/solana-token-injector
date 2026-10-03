@@ -25,7 +25,7 @@ genesis-1..3 and fresh-1 with fresh Solana keypairs through `POST /api/registrat
 | E1 | each registered wallet's injected Token-2022 amounts (`getTokenAccountsByOwner`, jsonParsed, through the service) == its wallet SDK balances, per token type; mint name/symbol/decimals == `tokens/tokens.undeployed.json`; nothing under the classic Token program; the API shows the same amounts |
 | E5 | an unregistered address: the service's answer is byte-identical to the validator's (both token programs) |
 | E6 | `spl-token accounts --owner <genesis-2's address>` lists the three mints with the SDK amounts; `spl-token display <mint>` shows the Token-2022 name/symbol (throwaway CLI config, never `~/.config/solana`) |
-| E2 | shielded transfer genesis-1 → fresh-1 (1234567 of `00…01`): fresh-1's injected amount == 1234567, at most 30 s after the wallet SDK sees the coin, no container restart |
+| E2 | shielded transfer genesis-1 → fresh-1 (1234567 of `00…01`): fresh-1's injected amount == 1234567, at most 30 s after the wallet SDK sees the coin (and polled for at most 60 s after `submitTransaction(…, 'Finalized')` returns), no container restart |
 | E9 | (informative) genesis-1's injected `00…01` total = its previous total + its change coin (viewing keys cannot see spends, Q3) |
 | E4 | `DELETE` genesis-3's registration → its tokens are gone on the very next call (answer = the validator's) |
 | E7 | `docker compose restart service` → same registration ids, totals rebuilt |
