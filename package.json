@@ -8,17 +8,21 @@
   },
   "scripts": {
     "start": "node proxy.js config.json",
-    "test": "node test/run.js"
+    "test": "node test/run.js && node --test --test-concurrency=4 \"test/unit/*.test.js\" \"test/integration/*.test.js\"",
+    "test:unit": "node --test \"test/unit/*.test.js\"",
+    "test:integration": "node --test --test-concurrency=4 \"test/integration/*.test.js\""
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "license": "MIT",
   "dependencies": {
     "@solana/spl-token": "^0.4.15",
     "@solana/spl-token-metadata": "^0.1.6",
     "@solana/web3.js": "^1.99.0",
+    "bech32": "^2.0.0",
     "bs58": "^6.0.0",
+    "graphql-ws": "^6.3.0",
     "json-bigint": "^1.0.0",
     "ws": "^8.22.0"
   },

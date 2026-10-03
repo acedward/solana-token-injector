@@ -1,6 +1,14 @@
 {
   "upstream": "https://api.devnet.solana.com",
   "port": 8899,
+  "dataDir": "./data",
+  "midnight": {
+    "networkId": "undeployed",
+    "indexerHttp": "http://127.0.0.1:8088/api/v4/graphql",
+    "indexerWs": "ws://127.0.0.1:8088/api/v4/graphql/ws",
+    "decryptorBin": "./decryptor/target/release/midnight-esk-decrypt",
+    "tokenRegistry": "./tokens/tokens.undeployed.json"
+  },
   "tokens": [
     {
       "name": "Night (mirror)",

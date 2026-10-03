@@ -1,0 +1,24 @@
+{
+  "network": "undeployed",
+  "note": "Genesis shielded token types of the local undeployed network (node genesis generator: 5 x 5e13 of 00..00 and 5e13 each of 00..01 / 00..02 per dev seed). Names are local placeholders; decimals 6 are a placeholder until integration (P2) confirms them.",
+  "tokens": {
+    "0000000000000000000000000000000000000000000000000000000000000000": {
+      "name": "Midnight Test Token",
+      "symbol": "MNTT",
+      "decimals": 6,
+      "description": "Local undeployed network genesis shielded token (type 00..00), shown display-only by solana-token-injector"
+    },
+    "0000000000000000000000000000000000000000000000000000000000000001": {
+      "name": "Midnight Alt Token 1",
+      "symbol": "MNA1",
+      "decimals": 6,
+      "description": "Local undeployed network genesis shielded token (type 00..01), shown display-only by solana-token-injector"
+    },
+    "0000000000000000000000000000000000000000000000000000000000000002": {
+      "name": "Midnight Alt Token 2",
+      "symbol": "MNA2",
+      "decimals": 6,
+      "description": "Local undeployed network genesis shielded token (type 00..02), shown display-only by solana-token-injector"
+    }
+  }
+}
