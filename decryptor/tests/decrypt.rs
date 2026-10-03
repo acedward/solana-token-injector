@@ -198,3 +198,16 @@ fn repeated_decryption_is_stable() {
         assert_eq!(coins(TX_1_2_2, 1), first);
     }
 }
+
+/// The `undeployed` keys of seeds 00…01..03, hard-coded in `scripts/selftest-check-fixtures.mjs`.
+#[test]
+fn undeployed_keys_used_by_the_script_selftest() {
+    assert_eq!(
+        [1u8, 2, 3].map(|seed| viewing_key(seed, "undeployed")),
+        [
+            "mn_shield-esk_undeployed1dlyj7u8juj68fd4psnkqhjxh32sec0q480vzswg8kd485e2kljcs9ete5h",
+            "mn_shield-esk_undeployed1w0dctw9zhe2ffqw4s5qks7rnl29wy5mhl957fv9nnhtxulent80q5t9mydg",
+            "mn_shield-esk_undeployed1wvd5v04ykt59gglxknsdxpwwkhhhj8d6h3ghpkgdhdsszap2p53qkzr6qn2",
+        ]
+    );
+}
