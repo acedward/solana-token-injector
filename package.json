@@ -10,7 +10,9 @@
     "start": "node proxy.js config.json",
     "test": "node test/run.js && node --test --test-concurrency=4 \"test/unit/*.test.js\" \"test/integration/*.test.js\"",
     "test:unit": "node --test \"test/unit/*.test.js\"",
-    "test:integration": "node --test --test-concurrency=4 \"test/integration/*.test.js\""
+    "test:integration": "node --test --test-concurrency=4 \"test/integration/*.test.js\"",
+    "e2e": "node harness/cli.mjs e2e",
+    "harness:install": "npm --prefix harness ci --no-audit --no-fund"
   },
   "engines": {
     "node": ">=22"
