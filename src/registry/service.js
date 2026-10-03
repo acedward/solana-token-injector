@@ -40,6 +40,8 @@ class RegistryService {
           decryptor,
           reconnectMinMs: midnight.reconnectMinMs,
           reconnectMaxMs: midnight.reconnectMaxMs,
+          syncMinMs: midnight.syncMinMs,
+          syncQuietMs: midnight.syncQuietMs,
         }));
   }
 

@@ -14,7 +14,7 @@ const { freePort } = require('./ports');
 
 const PATH = '/api/v4/graphql';
 
-async function startMockIndexer({ port } = {}) {
+async function startMockIndexer({ port, progressEveryMs = 0 } = {}) {
   port = port || (await freePort());
   const keys = new Map(); // viewingKey -> { txs: [RelevantTransaction events], sessionId }
   const sessions = new Map(); // sessionId -> viewingKey
@@ -23,6 +23,7 @@ async function startMockIndexer({ port } = {}) {
   let progress = { highestEndIndex: 10, highestCheckedEndIndex: 10, highestRelevantEndIndex: 10 };
   let down = false;
   let rejectSessions = false;
+  const rejectedKeys = new Set(); // subscriptions for these keys fail
   let txSeq = 0;
 
   const keyState = (k) => {
@@ -108,7 +109,7 @@ async function startMockIndexer({ port } = {}) {
         calls.queries.push(m.payload.query);
         const { sessionId, index = 0 } = m.payload.variables || {};
         const key = sessions.get(sessionId);
-        if (rejectSessions || !key || !/shieldedTransactions\(sessionId: \$sessionId, index: \$index\)/.test(m.payload.query)) {
+        if (rejectSessions || !key || rejectedKeys.has(key) || !/shieldedTransactions\(sessionId: \$sessionId, index: \$index\)/.test(m.payload.query)) {
           return send(ws, { id: m.id, type: 'error', payload: [{ message: 'unknown or expired session ID' }] });
         }
         const sub = { ws, id: m.id, key };
@@ -125,6 +126,10 @@ async function startMockIndexer({ port } = {}) {
   });
 
   await new Promise((r) => server.listen(port, '127.0.0.1', r));
+  // Like the real indexer, progress events can also come on an interval.
+  const ticker = progressEveryMs ? setInterval(() => {
+    for (const s of subs) next(s, progressEvent());
+  }, progressEveryMs) : null;
 
   const api = {
     port,
@@ -180,7 +185,17 @@ async function startMockIndexer({ port } = {}) {
     rejectSessions(v) {
       rejectSessions = v;
     },
+    /** Subscriptions for this key fail with "unknown or expired session ID" (on=false lifts it). */
+    rejectKey(key, on = true) {
+      if (on) rejectedKeys.add(key);
+      else rejectedKeys.delete(key);
+      if (on) for (const s of [...subs]) if (s.key === key) {
+        send(s.ws, { id: s.id, type: 'error', payload: [{ message: 'unknown or expired session ID' }] });
+        subs.delete(s);
+      }
+    },
     async close() {
+      if (ticker) clearInterval(ticker);
       for (const c of wss.clients) c.terminate();
       await new Promise((r) => wss.close(r));
       server.closeAllConnections();

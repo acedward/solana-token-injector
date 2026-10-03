@@ -30,7 +30,7 @@ test('registry service: shared watcher per key, sums, delete releases, rebuild b
   const map = createFakeMap(path.join(dir, 'map.json'), { tx1: [{ segment: 0, outputIndex: 0, commitment: hex(1), tokenType: T0, value: '2500000' }] });
   const decryptor = new DecryptorClient({ bin: FAKE_DECRYPTOR, env: { ...process.env, FAKE_DECRYPTOR_MAP: map.file } }).start();
   const indexer = await startMockIndexer();
-  const midnight = { networkId: 'undeployed', indexerHttp: indexer.httpUrl, indexerWs: indexer.wsUrl, reconnectMinMs: 50, reconnectMaxMs: 200 };
+  const midnight = { networkId: 'undeployed', indexerHttp: indexer.httpUrl, indexerWs: indexer.wsUrl, reconnectMinMs: 50, reconnectMaxMs: 200, syncMinMs: 0, syncQuietMs: 0 };
   let svc;
   const tokens = createTokenManager({
     publicUrl: 'http://x',

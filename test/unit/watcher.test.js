@@ -34,6 +34,13 @@ test('counting rule (Q19): SUCCESS all, PARTIAL_SUCCESS seg 0 + successful, FAIL
   assert.deepEqual(countableCoins(coins, partial).map((c) => c.value), ['1', '3']);
 });
 
+test('lane A local network shape {SUCCESS, segments: null} with guaranteed coins: all counted', () => {
+  // Genesis / wallet transfers carry only segment-0 outputs; Q19's rule and
+  // "segment 0 only when segments is null" agree on them.
+  const coins = [coin(1), coin(2), coin(3)];
+  assert.deepEqual(countableCoins(coins, { status: 'SUCCESS', segments: null }), coins);
+});
+
 test('progress: synced when checked >= highest; missing numbers = syncing', () => {
   assert.equal(progressSynced({ highestEndIndex: 5, highestCheckedEndIndex: 5 }), true);
   assert.equal(progressSynced({ highestEndIndex: 5, highestCheckedEndIndex: 6 }), true);
@@ -50,14 +57,14 @@ test('the subscription text is the 2.x wallet SDK selection', () => {
   }
 });
 
-async function setup(t, { decryptorTimeoutMs = 3000 } = {}) {
+async function setup(t, { decryptorTimeoutMs = 3000, syncMinMs = 0, syncQuietMs = 0, progressEveryMs = 0 } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sti-watch-'));
   const map = createFakeMap(path.join(dir, 'map.json'));
   const decryptor = new DecryptorClient({ bin: FAKE_DECRYPTOR, env: { ...process.env, FAKE_DECRYPTOR_MAP: map.file }, timeoutMs: decryptorTimeoutMs, minBackoffMs: 20 }).start();
-  const indexer = await startMockIndexer();
+  const indexer = await startMockIndexer({ progressEveryMs });
   const watchers = [];
   const watch = (viewingKey) => {
-    const w = new KeyWatcher({ viewingKey, networkId: 'undeployed', indexerHttp: indexer.httpUrl, indexerWs: indexer.wsUrl, decryptor, reconnectMinMs: 50, reconnectMaxMs: 200 });
+    const w = new KeyWatcher({ viewingKey, networkId: 'undeployed', indexerHttp: indexer.httpUrl, indexerWs: indexer.wsUrl, decryptor, reconnectMinMs: 50, reconnectMaxMs: 200, syncMinMs, syncQuietMs });
     watchers.push(w);
     return w.start();
   };
@@ -196,4 +203,66 @@ test('watcher: stop disposes the subscription and disconnects the session', asyn
   await w.stop();
   await waitFor(() => indexer.subscriptions(key) === 0, { what: 'subscription closed' });
   assert.deepEqual(indexer.calls.disconnect, [sessionId]);
+});
+
+// Sync rule (coordinator, from lane A's run of indexer 4.4.0-rc.1): progress
+// numbers alone cannot tell that a new session has caught up.
+function statusLog(w) {
+  const t0 = Date.now();
+  const log = [];
+  let prev = w.status;
+  w.on('change', () => {
+    if (w.status !== prev) log.push({ status: w.status, at: Date.now() - t0 });
+    prev = w.status;
+  });
+  return log;
+}
+
+test('sync rule: no `synced` before syncMinMs, even when progress says checked >= highest', async (t) => {
+  const { watch, tx } = await setup(t, { syncMinMs: 400, syncQuietMs: 150, progressEveryMs: 50 });
+  const key = testViewingKey();
+  tx(key, [coin(1)]);
+  const w = watch(key);
+  const log = statusLog(w);
+  await waitFor(() => w.lastEventAt && total(w) === 1n, { what: 'first events' });
+  assert.equal(w.status, 'syncing', 'first progress event (immediate) does not count');
+  await waitFor(() => w.status === 'synced', { what: 'synced', timeoutMs: 3000 });
+  const synced = log.find((e) => e.status === 'synced');
+  assert.ok(synced.at >= 380, `synced only after syncMinMs (got ${synced.at} ms)`);
+});
+
+test('sync rule: a transaction just before the progress event delays `synced` by syncQuietMs', async (t) => {
+  const { watch, tx } = await setup(t, { syncMinMs: 200, syncQuietMs: 500, progressEveryMs: 50 });
+  const key = testViewingKey();
+  const w = watch(key);
+  await waitFor(() => w.lastEventAt, { what: 'subscribed' });
+  const startedAt = Date.now();
+  await new Promise((r) => setTimeout(r, 150));
+  tx(key, [coin(2)]); // a late-arriving transaction (like the genesis tx a few seconds after connect)
+  const txAt = Date.now();
+  await waitFor(() => total(w) === 2n, { what: 'tx counted' });
+  await new Promise((r) => setTimeout(r, 200)); // past syncMinMs, inside the quiet window
+  assert.equal(w.status, 'syncing', `still syncing ${Date.now() - startedAt} ms after start, ${Date.now() - txAt} ms after the tx`);
+  await waitFor(() => w.status === 'synced', { what: 'synced', timeoutMs: 3000 });
+  assert.ok(Date.now() - txAt >= 480, 'synced only after the quiet window');
+});
+
+test('sync rule: once caught up, live transactions keep `synced`; behind or reconnect resets', async (t) => {
+  const { indexer, watch, tx } = await setup(t, { syncMinMs: 150, syncQuietMs: 100, progressEveryMs: 40 });
+  const key = testViewingKey();
+  const w = watch(key);
+  await waitFor(() => w.status === 'synced', { what: 'synced', timeoutMs: 3000 });
+  const log = statusLog(w);
+  tx(key, [coin(3)]);
+  await waitFor(() => total(w) === 3n, { what: 'live tx' });
+  await new Promise((r) => setTimeout(r, 150));
+  assert.deepEqual(log, [], 'no flip to syncing after a live transaction');
+  indexer.setProgress({ highestEndIndex: 12, highestCheckedEndIndex: 11, highestRelevantEndIndex: 0 });
+  await waitFor(() => w.status === 'syncing', { what: 'behind -> syncing' });
+  indexer.setProgress({ highestEndIndex: 12, highestCheckedEndIndex: 12, highestRelevantEndIndex: 0 });
+  await waitFor(() => w.status === 'synced', { what: 'synced again' });
+  indexer.dropSockets();
+  await waitFor(() => w.status === 'error', { what: 'error after drop' });
+  await waitFor(() => w.status === 'syncing', { what: 'syncing after reconnect' });
+  await waitFor(() => w.status === 'synced', { what: 'synced after reconnect', timeoutMs: 3000 });
 });

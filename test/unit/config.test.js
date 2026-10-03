@@ -44,6 +44,8 @@ test('tokens are optional when midnight is set; paths resolve against the config
   assert.equal(c.dataDir, path.join(REPO, 'data'));
   assert.equal(c.midnight.reconnectMinMs, 1000);
   assert.equal(c.midnight.reconnectMaxMs, 30000);
+  assert.equal(c.midnight.syncMinMs, 10000, 'sync rule: progress must arrive >= 10 s after subscribing');
+  assert.equal(c.midnight.syncQuietMs, 5000, 'sync rule: no relevant tx in the last 5 s');
   assert.equal(c.midnight.registry.tokens.get(T0).symbol, 'MNTT');
 });
 

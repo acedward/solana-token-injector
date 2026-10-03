@@ -5,12 +5,22 @@
 //      connection) subscribes to `shieldedTransactions(sessionId, index: 0)`;
 //   3. each RelevantTransaction -> decryptor `decrypt` -> coins kept by the
 //      counting rule (counting.js), de-duplicated by commitment (CoinBook);
-//   4. ShieldedTransactionsProgress -> `syncing` / `synced`;
+//   4. ShieldedTransactionsProgress -> `syncing` / `synced` (sync rule below);
 //   5. errors / socket close -> `error` status, totals kept, reconnect with
 //      exponential backoff (fresh `connect`, resubscribe from index 0);
 //   6. stop(): dispose the subscription, `disconnect(sessionId)` best effort.
 // One watcher per distinct viewing key: `connect` keeps one session per key
 // on the indexer side, so registrations sharing a key share the watcher.
+//
+// Sync rule (lane A, indexer 4.4.0-rc.1): progress numbers cannot tell when a
+// newly connected key has caught up — highestCheckedEndIndex is the maximum
+// over all wallets and is cached for up to 5 s, so a new session first reports
+// nothing relevant and its first transactions arrive seconds later. While a
+// subscription catches up, `synced` needs a progress event that arrives at
+// least `syncMinMs` (10 s) after the subscription started, with checked >=
+// highest, and no RelevantTransaction in the `syncQuietMs` (5 s) before it.
+// Once synced, the subscription stays synced unless a progress event shows
+// checked < highest.
 
 const EventEmitter = require('events');
 const WebSocket = require('ws');
@@ -75,7 +85,18 @@ async function graphqlPost(url, query, variables, timeoutMs) {
 }
 
 class KeyWatcher extends EventEmitter {
-  constructor({ viewingKey, networkId, indexerHttp, indexerWs, decryptor, reconnectMinMs = 1000, reconnectMaxMs = 30000, httpTimeoutMs = 15000 }) {
+  constructor({
+    viewingKey,
+    networkId,
+    indexerHttp,
+    indexerWs,
+    decryptor,
+    reconnectMinMs = 1000,
+    reconnectMaxMs = 30000,
+    httpTimeoutMs = 15000,
+    syncMinMs = 10000,
+    syncQuietMs = 5000,
+  }) {
     super();
     this.viewingKey = viewingKey;
     this.networkId = networkId;
@@ -85,6 +106,8 @@ class KeyWatcher extends EventEmitter {
     this.reconnectMinMs = reconnectMinMs;
     this.reconnectMaxMs = reconnectMaxMs;
     this.httpTimeoutMs = httpTimeoutMs;
+    this.syncMinMs = syncMinMs;
+    this.syncQuietMs = syncQuietMs;
 
     this.status = 'connecting';
     this.error = null;
@@ -95,6 +118,9 @@ class KeyWatcher extends EventEmitter {
     this.skipped = 0; // transactions the decryptor could not decode
     this.sessionId = null;
     this.connects = 0;
+    this.subscribedAt = 0; // when the current subscription was opened
+    this.lastTxArrivedAt = null; // arrival of the last RelevantTransaction on it
+    this.caughtUp = false; // the current subscription has reached `synced` once
 
     this.stopped = false;
     this.generation = 0;
@@ -177,6 +203,9 @@ class KeyWatcher extends EventEmitter {
         else resolve();
       };
       this.abortCurrent = finish;
+      this.subscribedAt = Date.now();
+      this.lastTxArrivedAt = null;
+      this.caughtUp = false;
       client.subscribe(
         { query: SUBSCRIPTION, variables: { sessionId, index: 0 } },
         {
@@ -189,6 +218,10 @@ class KeyWatcher extends EventEmitter {
   }
 
   _enqueue(gen, msg) {
+    const arrivedAt = Date.now();
+    const ev = msg && msg.data && msg.data.shieldedTransactions;
+    if (ev && ev.__typename === 'RelevantTransaction' && gen === this.generation) this.lastTxArrivedAt = arrivedAt;
+    msg = { ...msg, arrivedAt };
     this.chain = this.chain
       .then(() => this._handle(gen, msg))
       .catch((err) => {
@@ -212,7 +245,7 @@ class KeyWatcher extends EventEmitter {
         highestCheckedEndIndex: ev.highestCheckedEndIndex ?? ev.highestCheckedZswapEndIndex ?? null,
         highestRelevantEndIndex: ev.highestRelevantEndIndex ?? ev.highestRelevantZswapEndIndex ?? null,
       };
-      this._set(progressSynced(ev) ? 'synced' : 'syncing');
+      this._set(this._syncedAfter(ev, msg.arrivedAt) ? 'synced' : 'syncing');
       return;
     }
     if (ev.__typename !== 'RelevantTransaction' || !ev.transaction) return;
@@ -238,6 +271,16 @@ class KeyWatcher extends EventEmitter {
       }
     }
     if (added) this.emit('change', { kind: 'coins', added });
+  }
+
+  /** Sync rule (see the header): is the key caught up, given this progress event? */
+  _syncedAfter(ev, arrivedAt) {
+    if (!progressSynced(ev)) return false;
+    if (this.caughtUp) return true;
+    const oldEnough = arrivedAt - this.subscribedAt >= this.syncMinMs;
+    const quiet = this.lastTxArrivedAt === null || arrivedAt - this.lastTxArrivedAt >= this.syncQuietMs;
+    if (oldEnough && quiet) this.caughtUp = true;
+    return this.caughtUp;
   }
 
   snapshot() {

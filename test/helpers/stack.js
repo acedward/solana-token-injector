@@ -27,6 +27,8 @@ async function startStack({ networkId = 'undeployed', tokens, midnightExtra = {}
       reconnectMinMs: 100,
       reconnectMaxMs: 400,
       decryptorTimeoutMs: 3000,
+      syncMinMs: 0, // the sync-rule timings have their own unit tests
+      syncQuietMs: 0,
       ...midnightExtra,
     },
     ...(tokens ? { tokens } : {}),

@@ -21,7 +21,7 @@ const { createApiRoutes } = require('./api');
 
 // Keys a running process cannot change (a restart applies them).
 const RESTART_KEYS = ['upstream', 'upstreamWs', 'host', 'port', 'wsPort', 'publicUrl', 'dataDir'];
-const MIDNIGHT_RESTART_KEYS = ['networkId', 'indexerHttp', 'indexerWs', 'decryptorBin', 'reconnectMinMs', 'reconnectMaxMs', 'decryptorTimeoutMs'];
+const MIDNIGHT_RESTART_KEYS = ['networkId', 'indexerHttp', 'indexerWs', 'decryptorBin', 'reconnectMinMs', 'reconnectMaxMs', 'decryptorTimeoutMs', 'syncMinMs', 'syncQuietMs'];
 
 /**
  * createApp(config, { configPath?, watch?, reloadIntervalMs? })

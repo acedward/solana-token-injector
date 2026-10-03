@@ -112,6 +112,8 @@ function normalizeMidnight(rawM, { env, fromFile, fromEnv }) {
     reconnectMinMs,
     reconnectMaxMs,
     decryptorTimeoutMs: num('decryptorTimeoutMs', 30000, 100),
+    syncMinMs: num('syncMinMs', 10000, 0),
+    syncQuietMs: num('syncQuietMs', 5000, 0),
   };
 }
 
