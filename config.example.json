@@ -1,0 +1,16 @@
+{
+  "upstream": "https://api.devnet.solana.com",
+  "port": 8899,
+  "tokens": [
+    {
+      "name": "Night (mirror)",
+      "symbol": "NIGHT",
+      "decimals": 6,
+      "image": "https://example.com/night.png",
+      "description": "Display-only mirror of a balance held on another network",
+      "balances": {
+        "REPLACE_WITH_YOUR_WALLET_ADDRESS": "1250.5"
+      }
+    }
+  ]
+}

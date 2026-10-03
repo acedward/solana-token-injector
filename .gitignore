@@ -1,0 +1,14 @@
+node_modules/
+# Local configs hold wallet addresses; only the example is tracked.
+config.json
+config.*.json
+!config.example.json
+*.log
+# Runtime data (registrations hold viewing keys)
+data/
+# Test harness state, env and temp files
+harness/.state/
+harness/.env
+harness/**/.env
+# Rust build output
+decryptor/target/
