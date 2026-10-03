@@ -1,0 +1,84 @@
+# Local Midnight 2.x stack for the 00056 harness: node + indexer + proof server.
+#
+# Started and stopped by `node harness/cli.mjs up|down`, which writes harness/.env (gitignored)
+# with random, confirmed-free ports >= 10000 and a fresh indexer secret, and uses a unique
+# compose project name `s00056-<random>`. Every port is bound to 127.0.0.1 only.
+#
+# Recipe: AA 00025 docker/compose.yml (same node digest, env and healthcheck), with the 00056
+# substitutions: indexer 4.4.0-rc.1 (amd64 image, emulated) and proof server 9.0.0-rc.6.
+#
+# No pulls: every image must already be on the host (`pull_policy: never`).
+# Teardown: `docker compose -p <project> -f harness/compose.yml down -v --remove-orphans`.
+
+services:
+  proof-server:
+    # midnightntwrk/proof-server:9.0.0-rc.6 (local; same dust/9 keys as rc.5, multi-arch, arm64 here)
+    image: midnightntwrk/proof-server:9.0.0-rc.6
+    pull_policy: never
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 8g
+    ports:
+      - "127.0.0.1:${PORT_PROOF_SERVER:?}:6300"
+    environment:
+      RUST_BACKTRACE: "full"
+    # The image has no curl; readiness is checked from the host (GET /version -> 200).
+
+  node:
+    # midnightntwrk/midnight-node:2.0.0-rc.4 (arm64)
+    image: midnightntwrk/midnight-node@sha256:caf93d6f9fb3630c906ef3e714c151655377f3d28f907d17545de1870514da2e
+    pull_policy: never
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    mem_limit: 4g
+    ports:
+      - "127.0.0.1:${PORT_NODE_RPC:?}:9944"
+    volumes:
+      - node-data:/data
+    environment:
+      CFG_PRESET: "dev"
+      SHOW_CONFIG: "false"
+      # Same beneficiary the pinned wallet SDK's own undeployed stack uses (00025 recipe).
+      SIDECHAIN_BLOCK_BENEFICIARY: "04bcf7ad3be7a5c790460be82a713af570f22e0f801f6659ab8e84a52be6969e"
+    healthcheck:
+      # Block #1 must exist before the indexer starts: the 4.4.0-rc.1 indexer's bundled
+      # spo-indexer exits on a fresh chain otherwise (effectstream run_midnight_indexer.js).
+      test:
+        - "CMD-SHELL"
+        - >
+          curl -fs -H 'Content-Type: application/json' -d
+          '{"id":1,"jsonrpc":"2.0","method":"chain_getBlockHash","params":[1]}' http://localhost:9944 | grep -q
+          '"result":"0x'
+      interval: 2s
+      timeout: 5s
+      retries: 90
+      start_period: 5s
+
+  indexer:
+    # midnightntwrk/indexer-standalone:4.4.0-rc.1 (amd64 only; runs emulated on this arm64 host).
+    # The standalone build always runs the wallet-indexer (viewing-key `connect` sessions);
+    # no feature env is needed (indexer-standalone/src/main.rs spawns wallet_app::run).
+    image: midnightntwrk/indexer-standalone@sha256:5d79f3a20da9ed86236c7f7dc9d93b1beeb0b0c47c9c43a791041322eb80b74e
+    platform: linux/amd64
+    pull_policy: never
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 6g
+    depends_on:
+      node:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${PORT_INDEXER:?}:8088"
+    environment:
+      RUST_LOG: "${INDEXER_RUST_LOG:-info}"
+      APP__INFRA__NODE__URL: "ws://node:9944"
+      APP__APPLICATION__NETWORK_ID: "undeployed"
+      APP__INFRA__SECRET: "${APP_INFRA_SECRET:?}"
+      APP__INFRA__SPO_NODE__URL: "ws://node:9944"
+      APP__INFRA__SPO_NODE__BLOCKFROST_ID: "local-dev-dummy-not-using-spo"
+      # Default is 30s (with idle backoff); a short interval lets tests see "caught up" quickly.
+      APP__INFRA__API__SUBSCRIPTION__SHIELDED_TRANSACTIONS__PROGRESS_UPDATE_INTERVAL: "${INDEXER_PROGRESS_INTERVAL:-2s}"
+    # No curl in the image; readiness is checked from the host (GET /ready -> 200).
+
+volumes:
+  node-data:
