@@ -29,8 +29,13 @@ fn run(input: &[u8]) -> Run {
         .stderr(Stdio::piped())
         .spawn()
         .expect("binary starts");
-    child.stdin.take().unwrap().write_all(input).unwrap();
+    // Write stdin from another thread: the child's stdout/stderr pipes would fill up (and
+    // deadlock both sides) if all input were written before reading any output.
+    let mut stdin = child.stdin.take().unwrap();
+    let input = input.to_vec();
+    let writer = std::thread::spawn(move || stdin.write_all(&input));
     let output = child.wait_with_output().unwrap();
+    writer.join().unwrap().expect("stdin written");
     let stdout = String::from_utf8(output.stdout).expect("stdout is UTF-8");
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     let responses = stdout
@@ -148,4 +153,43 @@ fn version_flag() {
         String::from_utf8(output.stdout).unwrap().trim(),
         "midnight-esk-decrypt 0.1.0 (ledger 9.1.0.0-rc.3)"
     );
+}
+
+#[test]
+fn corrupted_transactions_never_kill_the_process() {
+    // Deterministic corruption of the fixture: single-byte flips across the whole transaction,
+    // and truncations. Every line must get a response and the process must exit 0.
+    let mut state: u64 = 0x5eed_0056;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let mut input = String::new();
+    let mut count = 0;
+    for _ in 0..300 {
+        let mut tx = TX_1_2_2.to_vec();
+        let pos = (next() as usize) % tx.len();
+        tx[pos] ^= 1 << (next() % 8);
+        input += &line(json!({"id": count, "op": "decrypt", "networkId": "undeployed", "viewingKey": KEY_1, "raw": hex::encode(&tx)}));
+        count += 1;
+    }
+    for cut in (0..TX_1_2_2.len()).step_by(997) {
+        input += &line(json!({"id": count, "op": "decrypt", "networkId": "undeployed", "viewingKey": KEY_1, "raw": hex::encode(&TX_1_2_2[..cut])}));
+        count += 1;
+    }
+    input += &line(json!({"id": "last", "op": "version"}));
+
+    let run = run(input.as_bytes());
+    assert!(run.success, "stderr: {}", run.stderr);
+    assert_eq!(run.responses.len(), count + 1);
+    for (i, response) in run.responses.iter().take(count).enumerate() {
+        assert_eq!(response["id"], json!(i));
+    }
+    assert_eq!(run.responses[count]["id"], "last");
+    let rejected = run.responses.iter().filter(|r| r["ok"] == false).count();
+    let panics = run.stderr.matches("panic caught").count();
+    println!("corrupted inputs: {count}, rejected: {rejected}, accepted: {}, panics caught: {panics}", count - rejected);
+    assert!(!run.stdout.contains(KEY_1) && !run.stderr.contains(KEY_1));
 }
