@@ -17,7 +17,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   HARNESS_DIR, ENV_FILE, STATE_DIR, STATE_FILE, PROJECT_PREFIX,
-  pickPorts, portFree, otherStacks, compose, run, newProjectName, writeEnv, waitMidnight,
+  preflight, pickPorts, portFree, otherStacks, compose, run, newProjectName, writeEnv, waitMidnight,
   startValidator, waitValidator, checkSolanaWs, stopValidator, pidAlive, readState, writeState, urlsFor,
 } from './lib/stack.mjs';
 import {
@@ -64,6 +64,9 @@ async function cmdUp(opts) {
         'Pass --allow-other-midnight to override.',
     );
   }
+
+  const pre = preflight();
+  log(`[up] preflight ok: images present, ${pre.solanaTestValidator}`);
 
   const t0 = Date.now();
   const taken = new Set();
@@ -116,6 +119,7 @@ async function cmdUp(opts) {
     log(`[up] solana websocket on rpc+1 answered slotSubscribe (id ${state.validator.wsSubscriptionId})`);
     writeState(state);
 
+    if (process.env.HARNESS_TEST_FAIL_AT === 'wallets') throw new Error('HARNESS_TEST_FAIL_AT=wallets (test hook)');
     log('[up] deriving wallets and querying SDK balances...');
     const wallets = [...FIXED_WALLETS, { name: 'fresh-1', seedHex: newFreshSeedHex() }];
     for (const w of wallets) {

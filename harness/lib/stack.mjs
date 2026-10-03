@@ -124,6 +124,21 @@ export function writeEnv(ports) {
   fs.writeFileSync(ENV_FILE, lines.join('\n') + '\n', { mode: 0o600 });
 }
 
+/** Fail early (before starting anything) if a required image or binary is missing. */
+export const REQUIRED_IMAGES = [
+  'midnightntwrk/midnight-node@sha256:caf93d6f9fb3630c906ef3e714c151655377f3d28f907d17545de1870514da2e',
+  'midnightntwrk/indexer-standalone@sha256:5d79f3a20da9ed86236c7f7dc9d93b1beeb0b0c47c9c43a791041322eb80b74e',
+  'midnightntwrk/proof-server:9.0.0-rc.6',
+];
+
+export function preflight() {
+  const missing = REQUIRED_IMAGES.filter((img) => run('docker', ['image', 'inspect', img], { allowFail: true, quiet: true }).status !== 0);
+  if (missing.length) throw new Error(`missing local Docker images (this harness never pulls): ${missing.join(', ')}`);
+  const v = spawnSync('solana-test-validator', ['--version'], { encoding: 'utf8' });
+  if (v.status !== 0) throw new Error(`solana-test-validator not runnable: ${v.error?.message ?? v.stderr}`);
+  return { solanaTestValidator: v.stdout.trim() };
+}
+
 // ---- readiness ------------------------------------------------------------------------------
 
 async function poll(what, fn, { timeoutMs, intervalMs = 1000, log }) {
@@ -194,8 +209,10 @@ export function startValidator({ rpcPort, faucetPort, gossipPort, dynamicLo, dyn
     stdio: ['ignore', fd, fd],
     env: { ...process.env, COPYFILE_DISABLE: '1' },
   });
+  child.on('error', (e) => fs.appendFileSync(logFile, `spawn error: ${e.message}\n`)); // never an uncaught 'error'
   child.unref();
   fs.closeSync(fd);
+  if (!child.pid) throw new Error(`could not start solana-test-validator (see ${logFile})`);
   return { pid: child.pid, dir, ledgerDir, logFile, args };
 }
 
