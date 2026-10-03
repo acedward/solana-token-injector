@@ -1,0 +1,33 @@
+{
+  "name": "solana-token-injector-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local test networks for 00056: Midnight 2.x (Docker) + native solana-test-validator, test wallets, shielded transfers, indexer fixtures.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "up": "node cli.mjs up",
+    "down": "node cli.mjs down",
+    "status": "node cli.mjs status",
+    "transfer": "node cli.mjs transfer",
+    "fixtures": "node cli.mjs fixtures"
+  },
+  "dependencies": {
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.3",
+    "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-beta.0",
+    "@midnightntwrk/wallet-sdk-address-format": "4.0.0-beta.2",
+    "@midnightntwrk/wallet-sdk-capabilities": "4.0.0-beta.2",
+    "@midnightntwrk/wallet-sdk-dust-wallet": "5.0.0-beta.2",
+    "@midnightntwrk/wallet-sdk-facade": "5.0.0-beta.2",
+    "@midnightntwrk/wallet-sdk-hd": "3.1.0-beta.1",
+    "@midnightntwrk/wallet-sdk-runtime": "1.0.6-beta.0",
+    "@midnightntwrk/wallet-sdk-shielded": "4.0.0-beta.2",
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "4.0.0-beta.2",
+    "@solana/web3.js": "1.99.0",
+    "graphql-ws": "6.3.0",
+    "rxjs": "7.8.2",
+    "ws": "8.22.0"
+  }
+}
