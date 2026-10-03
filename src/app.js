@@ -6,6 +6,8 @@ const spl = require('@solana/spl-token');
 const log = require('./log');
 const { loadConfig } = require('./config');
 const { createTokenManager } = require('./tokens/manager');
+const { midnightTokenSpecs } = require('./tokens/midnight');
+const { registryLookup } = require('./tokens/registry');
 const { watchConfig } = require('./config-watch');
 const { uiAmountString } = require('./amounts');
 const { createPlanner } = require('./rpc/planners');
@@ -15,7 +17,8 @@ const { createWsProxy } = require('./ws-proxy');
 const { createServers } = require('./server');
 
 // Keys a running process cannot change (a restart applies them).
-const RESTART_KEYS = ['upstream', 'upstreamWs', 'host', 'port', 'wsPort', 'publicUrl'];
+const RESTART_KEYS = ['upstream', 'upstreamWs', 'host', 'port', 'wsPort', 'publicUrl', 'dataDir'];
+const MIDNIGHT_RESTART_KEYS = ['networkId', 'indexerHttp', 'indexerWs', 'decryptorBin', 'reconnectMinMs', 'reconnectMaxMs', 'decryptorTimeoutMs'];
 
 /**
  * createApp(config, { configPath?, watch?, reloadIntervalMs? })
@@ -23,10 +26,15 @@ const RESTART_KEYS = ['upstream', 'upstreamWs', 'host', 'port', 'wsPort', 'publi
  */
 function createApp(config, opts = {}) {
   log.configure(config.log);
-  const tokens = createTokenManager({ publicUrl: config.publicUrl, staticSpecs: config.tokens });
-  const getState = tokens.getState;
   let current = config;
-  let stopWatching = () => {};
+  let lookup = registryLookup(config.midnight && config.midnight.registry);
+  // Registrations (with their per-key totals) are attached by the registry service.
+  let registrations = () => [];
+  const midnightSpecs = () =>
+    config.midnight ? midnightTokenSpecs({ networkId: config.midnight.networkId, registrations: registrations(), lookup }) : [];
+  const tokens = createTokenManager({ publicUrl: config.publicUrl, staticSpecs: config.tokens, midnightSpecs });
+  const getState = tokens.getState;
+  const stopWatching = [];
 
   const upstream = createUpstream(config.upstream);
   const handleRpc = createRpcHandler({ plan: createPlanner(getState), upstream });
@@ -57,26 +65,44 @@ function createApp(config, opts = {}) {
     console.log(`\nPoint your wallet's custom RPC at http://${host}:${port}\n`);
   }
 
-  /** Applies a reloaded config: static tokens and log level; warns about the rest. */
+  /**
+   * Applies a reloaded config: static tokens, log level and the token registry
+   * (names/decimals); warns about keys that need a restart.
+   */
   function applyReload(next) {
     const needRestart = RESTART_KEYS.filter((k) => JSON.stringify(next[k]) !== JSON.stringify(current[k]));
+    if (!!next.midnight !== !!current.midnight) needRestart.push('midnight');
+    else if (next.midnight) {
+      for (const k of MIDNIGHT_RESTART_KEYS) if (next.midnight[k] !== current.midnight[k]) needRestart.push(`midnight.${k}`);
+    }
     log.configure(next.log);
+    if (current.midnight && next.midnight) lookup = registryLookup(next.midnight.registry);
     tokens.setStaticSpecs(next.tokens);
-    current = { ...current, log: next.log, tokens: next.tokens };
-    log.warn(`config reloaded: ${next.tokens.length} static token(s)${needRestart.length ? `; restart needed to apply: ${needRestart.join(', ')}` : ''}`);
+    current = { ...current, log: next.log, tokens: next.tokens, midnight: current.midnight && next.midnight ? { ...current.midnight, registry: next.midnight.registry, tokenRegistry: next.midnight.tokenRegistry } : current.midnight };
+    const reg = current.midnight && current.midnight.registry ? `, ${current.midnight.registry.tokens.size} registry token type(s)` : '';
+    log.warn(`config reloaded: ${next.tokens.length} static token(s)${reg}${needRestart.length ? `; restart needed to apply: ${needRestart.join(', ')}` : ''}`);
   }
 
   if (opts.watch && opts.configPath) {
-    stopWatching = watchConfig(opts.configPath, {
+    const watchOpts = {
       load: () => loadConfig(opts.configPath),
       onReload: applyReload,
       onError: (err) => log.warn(`config reload failed, keeping the previous config: ${err.message}`),
       intervalMs: opts.reloadIntervalMs,
-    });
+    };
+    stopWatching.push(watchConfig(opts.configPath, watchOpts));
+    // The token registry file is watched too: editing a name needs no restart.
+    if (config.midnight && config.midnight.tokenRegistry) stopWatching.push(watchConfig(config.midnight.tokenRegistry, watchOpts));
+  }
+
+  /** Called by the registry service: source of per-address Midnight totals. */
+  function setRegistrationSource(fn) {
+    registrations = fn;
+    tokens.invalidate();
   }
 
   async function close() {
-    stopWatching();
+    for (const stop of stopWatching) stop();
     tokens.stop();
     wsProxy.close();
     const closing = [server, wsServer].map((s) => new Promise((r) => (s.listening ? s.close(() => r()) : r())));
@@ -85,7 +111,7 @@ function createApp(config, opts = {}) {
     await Promise.all(closing);
   }
 
-  return { config, getState, tokens, applyReload, server, wsServer, listen, banner, close };
+  return { config, getState, tokens, applyReload, setRegistrationSource, server, wsServer, listen, banner, close };
 }
 
 async function main(configArg) {

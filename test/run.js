@@ -137,7 +137,8 @@ function wsRoundTrip(url) {
     ],
   }));
 
-  const proxy = spawn(process.execPath, [path.join(__dirname, '..', 'proxy.js'), cfgPath], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const { cleanEnv } = require('./helpers/service');
+  const proxy = spawn(process.execPath, [path.join(__dirname, '..', 'proxy.js'), cfgPath], { stdio: ['ignore', 'pipe', 'inherit'], env: cleanEnv() });
   let banner = '';
   await new Promise((resolve, reject) => {
     proxy.stdout.on('data', (d) => { banner += d; if (banner.includes('Point your wallet')) resolve(); });

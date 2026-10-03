@@ -11,6 +11,15 @@ const { freePort } = require('./ports');
 
 const ROOT = path.join(__dirname, '..', '..');
 
+// Config env overrides (master plan I-4) must not leak from the developer's shell into tests.
+const CONFIG_ENV = ['CONFIG', 'HOST', 'PORT', 'PUBLIC_URL', 'UPSTREAM', 'UPSTREAM_WS', 'DATA_DIR', 'MIDNIGHT_NETWORK_ID',
+  'MIDNIGHT_INDEXER_HTTP', 'MIDNIGHT_INDEXER_WS', 'DECRYPTOR_BIN', 'TOKEN_REGISTRY', 'LOG', 'CONFIG_WATCH'];
+function cleanEnv(extra = {}) {
+  const env = { ...process.env };
+  for (const k of CONFIG_ENV) delete env[k];
+  return { ...env, ...extra };
+}
+
 function makeTempDir(prefix = 'sti-test-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
@@ -30,7 +39,7 @@ async function startService({ config, dir, env = {}, readyTimeoutMs = 15000 }) {
   let out = '';
   const child = spawn(process.execPath, [path.join(ROOT, 'proxy.js'), configPath], {
     cwd: dir,
-    env: { ...process.env, ...env },
+    env: cleanEnv(env),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (d) => (out += d));
@@ -108,4 +117,4 @@ async function waitFor(fn, { timeoutMs = 5000, intervalMs = 50, what = 'conditio
   }
 }
 
-module.exports = { startService, waitFor, makeTempDir, ROOT };
+module.exports = { startService, waitFor, makeTempDir, cleanEnv, ROOT };
