@@ -15,6 +15,8 @@ const { createUpstream } = require('./rpc/upstream');
 const { createRpcHandler } = require('./rpc/handler');
 const { createWsProxy } = require('./ws-proxy');
 const { createServers } = require('./server');
+const { DecryptorClient } = require('./midnight/decryptor');
+const { RegistryService } = require('./registry/service');
 
 // Keys a running process cannot change (a restart applies them).
 const RESTART_KEYS = ['upstream', 'upstreamWs', 'host', 'port', 'wsPort', 'publicUrl', 'dataDir'];
@@ -35,6 +37,29 @@ function createApp(config, opts = {}) {
   const tokens = createTokenManager({ publicUrl: config.publicUrl, staticSpecs: config.tokens, midnightSpecs });
   const getState = tokens.getState;
   const stopWatching = [];
+
+  // Midnight: decryptor child process + registrations with their watchers.
+  let decryptor = null;
+  let registry = null;
+  if (config.midnight) {
+    decryptor = new DecryptorClient({ bin: config.midnight.decryptorBin, timeoutMs: config.midnight.decryptorTimeoutMs }).start();
+    registry = new RegistryService({
+      midnight: config.midnight,
+      dataDir: config.dataDir,
+      decryptor,
+      onChange: () => tokens.invalidate(),
+      onChangeNow: () => tokens.rebuildNow(),
+      getLookup: () => lookup,
+    });
+    try {
+      registry.start();
+    } catch (err) {
+      decryptor.stop();
+      throw err;
+    }
+    registrations = () => registry.tokenInputs();
+    tokens.rebuildNow();
+  }
 
   const upstream = createUpstream(config.upstream);
   const handleRpc = createRpcHandler({ plan: createPlanner(getState), upstream });
@@ -95,14 +120,10 @@ function createApp(config, opts = {}) {
     if (config.midnight && config.midnight.tokenRegistry) stopWatching.push(watchConfig(config.midnight.tokenRegistry, watchOpts));
   }
 
-  /** Called by the registry service: source of per-address Midnight totals. */
-  function setRegistrationSource(fn) {
-    registrations = fn;
-    tokens.invalidate();
-  }
-
   async function close() {
     for (const stop of stopWatching) stop();
+    if (registry) await registry.stop();
+    if (decryptor) await decryptor.stop();
     tokens.stop();
     wsProxy.close();
     const closing = [server, wsServer].map((s) => new Promise((r) => (s.listening ? s.close(() => r()) : r())));
@@ -111,7 +132,7 @@ function createApp(config, opts = {}) {
     await Promise.all(closing);
   }
 
-  return { config, getState, tokens, applyReload, setRegistrationSource, server, wsServer, listen, banner, close };
+  return { config, getState, tokens, registry, decryptor, upstream, applyReload, server, wsServer, listen, banner, close };
 }
 
 async function main(configArg) {
@@ -127,7 +148,7 @@ async function main(configArg) {
   try {
     app = createApp(config, { configPath, watch: process.env.CONFIG_WATCH !== '0' });
   } catch (e) {
-    console.error(`config error: ${e.message}`);
+    console.error(`startup error: ${e.message}`);
     process.exit(1);
   }
   await app.listen();
