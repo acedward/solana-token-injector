@@ -1,0 +1,13 @@
+# Build context of the service image (Dockerfile): only what the image needs.
+*
+!package.json
+!package-lock.json
+!proxy.js
+!src
+!tokens
+!decryptor
+decryptor/*
+!decryptor/Cargo.toml
+!decryptor/Cargo.lock
+!decryptor/rust-toolchain.toml
+!decryptor/src
