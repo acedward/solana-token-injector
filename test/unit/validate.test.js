@@ -7,7 +7,8 @@ const crypto = require('crypto');
 const bs58 = require('bs58').default || require('bs58');
 const { Keypair } = require('@solana/web3.js');
 const { validateRegistration, validateSolanaAddress, validateViewingKeyFormat, viewingKeyHrp, ValidationError } = require('../../src/registry/validate');
-const { testViewingKey, KNOWN_KEY } = require('../helpers/keys');
+const { bech32m } = require('bech32');
+const { testViewingKey, KNOWN_KEY, GENESIS_2_KEY, GENESIS_3_KEY } = require('../helpers/keys');
 
 const addr = Keypair.generate().publicKey.toBase58();
 const okDecryptor = { validateKey: async () => ({ ok: true }) };
@@ -58,9 +59,18 @@ test('malformed and wrong-network viewing keys are rejected with a message', asy
   await rejects({ solanaAddress: addr, viewingKey: testViewingKey('x', { hrp: 'mn_shield-addr_undeployed' }) }, /shielded address/);
   await rejects({ solanaAddress: addr, viewingKey: testViewingKey('x', { hrp: 'mn_dust_undeployed' }) }, /"mn_dust_undeployed" string, not a viewing key/);
   await rejects({ solanaAddress: addr, viewingKey: testViewingKey('x', { hrp: 'bc' }) }, /must start with mn_shield-esk_undeployed1/);
-  await rejects({ solanaAddress: addr, viewingKey: testViewingKey('undeployed', { bytes: 31 }) }, /31 bytes, expected 32/);
+  // The payload must be a serialized secret key (SCALE compact big integer, 1..33 bytes, self-describing length).
+  await rejects({ solanaAddress: addr, viewingKey: testViewingKey('undeployed', { bytes: 34 }) }, /payload \(34 bytes\) is not a serialized encryption secret key/);
+  await rejects({ solanaAddress: addr, viewingKey: bech32m.encode('mn_shield-esk_undeployed', bech32m.toWords(Buffer.concat([Buffer.from([0x73]), crypto.randomBytes(31)])), 1000) }, /payload \(32 bytes\) is not a serialized/);
+  await rejects({ solanaAddress: addr, viewingKey: bech32m.encode('mn_shield-esk_undeployed', bech32m.toWords(Buffer.concat([Buffer.from([0x6f]), crypto.randomBytes(32)])), 1000) }, /payload \(33 bytes\) is not a serialized/);
   await rejects('nope', /JSON object/);
   await rejects([addr], /JSON object/);
+});
+
+test('real dev-seed viewing keys pass the format check (32- and 33-byte serialized payloads, P2 finding)', () => {
+  for (const key of [KNOWN_KEY, GENESIS_2_KEY, GENESIS_3_KEY]) assert.equal(validateViewingKeyFormat(key, 'undeployed'), key);
+  assert.equal(bech32m.fromWords(bech32m.decode(KNOWN_KEY, 1000).words).length, 32);
+  assert.equal(bech32m.fromWords(bech32m.decode(GENESIS_2_KEY, 1000).words).length, 33);
 });
 
 test('the decryptor has the final word (I-1 validateKey)', async () => {

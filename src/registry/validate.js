@@ -4,7 +4,12 @@
 //
 // 1. Solana address: base58 that decodes to a 32-byte public key.
 // 2. Viewing key: bech32m, HRP `mn_shield-esk_<networkId>` (`mn_shield-esk`
-//    on mainnet), 32-byte payload (the indexer's VIEWING_KEY_LEN).
+//    on mainnet); the payload is the ledger's serialized encryption secret key,
+//    a SCALE compact big integer of 1..33 bytes whose first byte gives its length
+//    (midnight-serialize `ScaleBigInt`). The indexer deserializes it the same way
+//    (`SecretKey::deserialize`); its VIEWING_KEY_LEN = 32 is the length of the
+//    key's `repr()`, not of this payload (P2 finding, 2026-10-03: the dev seeds
+//    00..02 / 00..03 give 33-byte payloads, 00..01 a 32-byte one).
 // 3. The decryptor's `validateKey` (master plan I-1) has the final word: it
 //    checks that the payload deserializes as an encryption secret key.
 
@@ -12,7 +17,22 @@ const { PublicKey } = require('@solana/web3.js');
 const { bech32, bech32m } = require('bech32');
 const { redact } = require('../log');
 
-const VIEWING_KEY_BYTES = 32;
+// Serialized encryption secret key: at most 1 header byte + 32 value bytes.
+const VIEWING_KEY_MAX_BYTES = 33;
+
+/** Total length of a SCALE compact big integer given its first byte (midnight-serialize util.rs ScaleBigInt). */
+function scaleCompactLength(b0) {
+  switch (b0 & 0b11) {
+    case 0b00:
+      return 1;
+    case 0b01:
+      return 2;
+    case 0b10:
+      return 4;
+    default:
+      return (b0 >> 2) + 5;
+  }
+}
 const BECH32_LIMIT = 1000;
 
 class ValidationError extends Error {
@@ -82,8 +102,8 @@ function validateViewingKeyFormat(input, networkId) {
   } catch {
     throw new ValidationError('viewing key payload is not decodable (bad padding)');
   }
-  if (bytes.length !== VIEWING_KEY_BYTES) {
-    throw new ValidationError(`viewing key payload is ${bytes.length} bytes, expected ${VIEWING_KEY_BYTES}`);
+  if (bytes.length === 0 || bytes.length > VIEWING_KEY_MAX_BYTES || scaleCompactLength(bytes[0]) !== bytes.length) {
+    throw new ValidationError(`viewing key payload (${bytes.length} bytes) is not a serialized encryption secret key; check that you copied the whole key`);
   }
   return s.toLowerCase(); // bech32 allows an all-uppercase form; store one canonical spelling
 }
@@ -117,5 +137,6 @@ module.exports = {
   validateSolanaAddress,
   validateViewingKeyFormat,
   validateRegistration,
-  VIEWING_KEY_BYTES,
+  VIEWING_KEY_MAX_BYTES,
+  scaleCompactLength,
 };
