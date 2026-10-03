@@ -180,6 +180,23 @@ export async function waitMidnight(urls, log) {
   const out = {};
   out.block1 = await poll('node (block #1)', () => rpc(urls.nodeHttp, 'chain_getBlockHash', [1]), { timeoutMs: 240_000, log });
   await poll('indexer GET /ready', () => httpOk(urls.indexerHttp.replace(/\/api\/v4\/graphql$/, '/ready')), { timeoutMs: 240_000, log });
+  // The indexer follows FINALIZED blocks (~2 behind best, 6 s blocks). Until it has indexed block #1,
+  // its latest block is genesis (timestamp 2025-08-05), and wallets value DUST at that block time
+  // (zero generated), so fee balancing fails. Wait for a post-genesis block.
+  out.indexerBlock = await poll(
+    'indexer block height >= 1',
+    async () => {
+      const r = await fetch(urls.indexerHttp, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: '{ block { height timestamp } }' }),
+        signal: AbortSignal.timeout(5000),
+      });
+      const b = (await r.json())?.data?.block;
+      return b && b.height >= 1 ? b : null;
+    },
+    { timeoutMs: 240_000, log },
+  );
   const ps = await poll('proof server GET /version', () => httpOk(urls.proofServer + '/version'), { timeoutMs: 240_000, log });
   out.proofServerVersion = (await ps.text()).trim();
   out.nodeVersion = await rpc(urls.nodeHttp, 'system_version');

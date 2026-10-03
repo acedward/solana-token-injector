@@ -201,18 +201,36 @@ export function facadeSummary(state) {
  * Shielded transfer of `amount` of `tokenHex` from `fromSeedHex` to the shielded address of
  * `toSeedHex` (or to `toAddress`). Returns `{ txId, before, after }`.
  */
-export async function shieldedTransfer({ fromSeedHex, toAddressObj, tokenHex, amount, urls, networkId = NETWORK_ID, log = console.error }) {
-  const f = await buildFacade(fromSeedHex, urls, { networkId });
-  try {
+export async function shieldedTransfer({ fromSeedHex, toAddressObj, tokenHex, amount, urls, networkId = NETWORK_ID, dustWaitMs = 300_000, log = console.error }) {
+  // Fees are paid in DUST valued at the latest INDEXED block's timestamp. `up` waits for the indexer
+  // to pass genesis (whose timestamp is 2025-08-05, i.e. zero generated DUST), but if balancing still
+  // reports insufficient funds, rebuild the wallet and retry: a failed attempt may leave the shielded
+  // coins it selected booked in that wallet instance.
+  const deadline = Date.now() + dustWaitMs;
+  let f;
+  let beforeSummary;
+  let recipe;
+  for (let attempt = 1; ; attempt++) {
+    f = await buildFacade(fromSeedHex, urls, { networkId });
     log('[transfer] syncing sender wallet (shielded + unshielded + dust)...');
     const before = await waitFacadeSynced(f.wallet);
-    const beforeSummary = facadeSummary(before);
+    beforeSummary = facadeSummary(before);
     log(`[transfer] sender synced: ${JSON.stringify(beforeSummary)}`);
-    const recipe = await f.wallet.transferTransaction(
-      [{ type: 'shielded', outputs: [{ amount: BigInt(amount), type: tokenHex, receiverAddress: toAddressObj }] }],
-      { shieldedSecretKeys: f.zswapSecretKeys, dustSecretKey: f.dustSecretKey },
-      { ttl: new Date(Date.now() + 60 * 60 * 1000) },
-    );
+    try {
+      recipe = await f.wallet.transferTransaction(
+        [{ type: 'shielded', outputs: [{ amount: BigInt(amount), type: tokenHex, receiverAddress: toAddressObj }] }],
+        { shieldedSecretKeys: f.zswapSecretKeys, dustSecretKey: f.dustSecretKey },
+        { ttl: new Date(Date.now() + 60 * 60 * 1000) },
+      );
+      break;
+    } catch (e) {
+      await f.wallet.stop().catch(() => {});
+      if (!/insufficient funds/i.test(e?.message ?? '') || Date.now() > deadline) throw e;
+      log(`[transfer] attempt ${attempt}: ${e.message}; rebuilding the wallet in 5 s...`);
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  }
+  try {
     if (recipe.type !== 'UNPROVEN_TRANSACTION') throw new Error(`unexpected recipe type ${recipe.type}`);
     const signed = await f.wallet.signRecipe(recipe, (payload) => f.keystore.signDataAsync(payload));
     log('[transfer] proving (proof server)...');

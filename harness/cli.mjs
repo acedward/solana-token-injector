@@ -5,7 +5,7 @@
 //   node harness/cli.mjs status                        print the state file and liveness
 //   node harness/cli.mjs balances [--wallet <name>]     re-query SDK balances, update the state file
 //   node harness/cli.mjs transfer --from <w> --to <w> --token <64 hex> --amount <n>
-//   node harness/cli.mjs fixtures [--wallet <name>]     capture indexer fixtures -> fixtures/undeployed/<wallet>.json
+//   node harness/cli.mjs fixtures [--wallet <name>] [--out <dir>]  capture indexer fixtures -> fixtures/undeployed/<wallet>.json
 //   node harness/cli.mjs down [--all]                  tear everything down and check nothing is left (gate A5)
 //   node harness/cli.mjs wallets [--seed <hex>]        offline: derive viewing keys / addresses (no stack)
 //   node harness/cli.mjs check-vk                      offline: gate A2 known-answer check
@@ -314,7 +314,8 @@ async function cmdTransfer(opts) {
 
 async function cmdFixtures(opts) {
   const s = needState();
-  fs.mkdirSync(FIXTURES_DIR, { recursive: true });
+  const outDir = opts.out ? path.resolve(opts.out) : FIXTURES_DIR;
+  fs.mkdirSync(outDir, { recursive: true });
   const summary = [];
   for (const w of s.wallets) {
     if (opts.wallet && w.name !== opts.wallet) continue;
@@ -349,11 +350,11 @@ async function cmdFixtures(opts) {
         raw: ev.transaction.raw,
       })),
     };
-    const file = path.join(FIXTURES_DIR, `${w.name}.json`);
+    const file = path.join(outDir, `${w.name}.json`);
     fs.writeFileSync(file, JSON.stringify(fixture, null, 2) + '\n');
     const row = {
       wallet: w.name,
-      file: path.relative(HARNESS_DIR, file),
+      file,
       transactions: fixture.transactions.length,
       statuses: fixture.transactions.map((t) => t.transactionResult?.status),
       sdkBalances: balances,
@@ -395,6 +396,7 @@ const { positionals, values } = parseArgs({
     amount: { type: 'string' },
     wallet: { type: 'string' },
     seed: { type: 'string' },
+    out: { type: 'string' },
     all: { type: 'boolean' },
     'allow-other-midnight': { type: 'boolean' },
     'keep-on-failure': { type: 'boolean' },

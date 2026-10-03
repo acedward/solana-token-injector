@@ -20,12 +20,12 @@ All commands print logs to stderr and one JSON result to stdout.
 
 | Command | What it does |
 |---|---|
-| `node harness/cli.mjs up` | Preflight: the three images are present and `solana-test-validator` runs. Refuses if a state file exists, another `s00056-*` compose project exists, or another Midnight node/indexer container is running (`--allow-other-midnight` overrides). Picks free ports ≥ 10000, writes `harness/.env`, `docker compose -p s00056-<random> up -d`, waits for node block #1, indexer `GET /ready` and proof server `GET /version`, starts the validator (temp ledger dir, PID recorded), waits for `GET /health` = `ok` and a `slotSubscribe` answer on the websocket (rpc port + 1), derives the wallets, checks the indexer accepts each viewing key (`connect`), queries each wallet's SDK balances, writes `harness/.state/run.json`. A failure tears the partial stack down (unless `--keep-on-failure`; `HARNESS_TEST_FAIL_AT=wallets` forces one, for testing that path). About 11–13 s. |
+| `node harness/cli.mjs up` | Preflight: the three images are present and `solana-test-validator` runs. Refuses if a state file exists, another `s00056-*` compose project exists, or another Midnight node/indexer container is running (`--allow-other-midnight` overrides). Picks free ports ≥ 10000, writes `harness/.env`, `docker compose -p s00056-<random> up -d`, waits for node block #1, indexer `GET /ready`, the indexer's first post-genesis block, and proof server `GET /version`, starts the validator (temp ledger dir, PID recorded), waits for `GET /health` = `ok` and a `slotSubscribe` answer on the websocket (rpc port + 1), derives the wallets, checks the indexer accepts each viewing key (`connect`), queries each wallet's SDK balances, writes `harness/.state/run.json`. A failure tears the partial stack down (unless `--keep-on-failure`; `HARNESS_TEST_FAIL_AT=wallets` forces one, for testing that path). About 15–20 s. |
 | `node harness/cli.mjs status` | State file + container states + validator liveness. |
 | `node harness/cli.mjs balances [--wallet <name>]` | Re-query the SDK balances (standard shielded wallet, full sync) and update the state file. |
 | `node harness/cli.mjs dust [--wallet genesis-1]` | Wallet-facade view of one wallet: shielded, unshielded NIGHT, DUST balance and coins. |
-| `node harness/cli.mjs transfer --from <w> --to <w> --token <64 hex> --amount <n>` | Shielded transfer with the wallet facade (fees in DUST, proof by the local proof server), then waits until the receiver's SDK balance shows it. Marks the sender `spentAnything`. About 20 s. |
-| `node harness/cli.mjs fixtures [--wallet <name>]` | Per wallet: indexer `connect(viewingKey)` + `shieldedTransactions(sessionId, index: 0)` until caught up, then writes `harness/fixtures/undeployed/<wallet>.json` (master plan I-3). About 15 s per wallet. |
+| `node harness/cli.mjs transfer --from <w> --to <w> --token <64 hex> --amount <n>` | Shielded transfer with the wallet facade (fees in DUST, proof by the local proof server), then waits until the receiver's SDK balance shows it. Retries (rebuilding the wallet) for up to 300 s while fee balancing reports insufficient funds. Marks the sender `spentAnything`. About 20 s. |
+| `node harness/cli.mjs fixtures [--wallet <name>] [--out <dir>]` | Per wallet: indexer `connect(viewingKey)` + `shieldedTransactions(sessionId, index: 0)` until caught up, then writes `<dir>/<wallet>.json` (default `harness/fixtures/undeployed/`, the committed set; use `--out` to avoid overwriting it) in the master plan I-3 format. About 15 s per wallet. |
 | `node harness/cli.mjs down [--all]` | `docker compose down -v --remove-orphans`, kills the validator's process group, deletes its temp dir, `.state/` and `.env`, then checks nothing is left (containers, volumes, networks with the project label; validator PID; ports) and prints `clean: true/false`. `--all` also removes every other `s00056-*` project. |
 | `node harness/cli.mjs wallets [--seed <hex>]` | Offline: derive viewing keys and shielded addresses. |
 | `node harness/cli.mjs check-vk` | Offline: the viewing-key derivation against the node toolkit's known answers (exit 1 on mismatch). |
@@ -82,5 +82,12 @@ These are local `undeployed` test keys only.
 - `transactionResult.segments` is `null` for these `SUCCESS` transactions.
 - A viewing key sees received coins only (questions file Q3): genesis-1's fixture contains its
   original coins and its change, not its spend.
+- DUST for fees is valued at the latest block the INDEXER has (`blockData.timestamp`), not the system
+  clock. The genesis block's timestamp is 2025-08-05 and the indexer follows finalized blocks
+  (~2 behind, 6 s blocks), so until it indexes block #1 the genesis wallets have zero usable DUST
+  ("Insufficient Funds: could not balance dust") even though `dust` (system clock) shows
+  1.25·10²⁴. `up` therefore waits for indexer height ≥ 1.
+- The genesis transaction is deterministic: its hash and raw bytes are identical on every fresh
+  chain; transfer transactions differ per run.
 - DUST: after paying 275386941611635 for the transfer, genesis-1's DUST balance still read
   1250000000000000000000000 (UNVERIFIED why; probably the generation cap is reached again at once).
