@@ -14,8 +14,10 @@ const JSONbig = require('json-bigint')({ useNativeBigInt: true });
 const { Connection, Keypair, PublicKey } = require('@solana/web3.js');
 const spl = require('@solana/spl-token');
 
-const UP_PORT = 28799; // mock upstream (ws on 28800)
-const PX_PORT = 28899; // proxy (ws on 28900)
+const { freePort } = require('./helpers/ports');
+
+let UP_PORT; // mock upstream (ws on UP_PORT + 1), random free port >= 10000
+let PX_PORT; // proxy (ws on PX_PORT + 1), random free port >= 10000
 const MPL = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
 const wallet = Keypair.generate().publicKey;
@@ -82,8 +84,11 @@ const upstream = http.createServer((req, res) => {
     res.end(JSONbig.stringify(out));
   });
 });
-const upstreamWs = new WebSocketServer({ port: UP_PORT + 1, host: '127.0.0.1' });
-upstreamWs.on('connection', (ws) => ws.on('message', (m) => ws.send(JSON.stringify({ jsonrpc: '2.0', result: 42, id: JSON.parse(m).id }))));
+let upstreamWs;
+function startUpstreamWs() {
+  upstreamWs = new WebSocketServer({ port: UP_PORT + 1, host: '127.0.0.1' });
+  upstreamWs.on('connection', (ws) => ws.on('message', (m) => ws.send(JSON.stringify({ jsonrpc: '2.0', result: 42, id: JSON.parse(m).id }))));
+}
 
 // ------------------------------------------------------------ helpers
 
@@ -116,7 +121,10 @@ function wsRoundTrip(url) {
 // ------------------------------------------------------------ run
 
 (async () => {
+  UP_PORT = await freePort(2);
+  PX_PORT = await freePort(2);
   await new Promise((r) => upstream.listen(UP_PORT, '127.0.0.1', r));
+  startUpstreamWs();
 
   const cfgPath = path.join(os.tmpdir(), `injector-test-${process.pid}.json`);
   fs.writeFileSync(cfgPath, JSON.stringify({

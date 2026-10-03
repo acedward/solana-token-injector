@@ -11,7 +11,7 @@
     "test": "node test/run.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "license": "MIT",
   "dependencies": {
