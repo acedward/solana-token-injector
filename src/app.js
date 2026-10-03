@@ -17,6 +17,7 @@ const { createWsProxy } = require('./ws-proxy');
 const { createServers } = require('./server');
 const { DecryptorClient } = require('./midnight/decryptor');
 const { RegistryService } = require('./registry/service');
+const { createApiRoutes } = require('./api');
 
 // Keys a running process cannot change (a restart applies them).
 const RESTART_KEYS = ['upstream', 'upstreamWs', 'host', 'port', 'wsPort', 'publicUrl', 'dataDir'];
@@ -64,7 +65,8 @@ function createApp(config, opts = {}) {
   const upstream = createUpstream(config.upstream);
   const handleRpc = createRpcHandler({ plan: createPlanner(getState), upstream });
   const wsProxy = createWsProxy(config.upstreamWs);
-  const { server, wsServer } = createServers({ handleRpc, getState, acceptUpgrade: wsProxy.acceptUpgrade });
+  const routes = createApiRoutes({ config, registry, decryptor, upstream });
+  const { server, wsServer } = createServers({ handleRpc, getState, acceptUpgrade: wsProxy.acceptUpgrade, routes });
 
   function listen() {
     return new Promise((resolve, reject) => {
@@ -86,6 +88,12 @@ function createApp(config, opts = {}) {
       console.log(`  ${m.symbol}  mint ${mint}  (${m.programId === spl.TOKEN_2022_PROGRAM_ID.toBase58() ? 'Token-2022' : 'Token'})`);
       console.log(`        metadata uri ${m.uri}`);
       for (const h of m.holders) console.log(`        token account ${h.address}  balance ${uiAmountString(h.amount, m.decimals)}`);
+    }
+    if (config.midnight) {
+      const n = registry.store.list().length;
+      console.log(`  Midnight   network ${config.midnight.networkId}, indexer ${config.midnight.indexerHttp}`);
+      console.log(`             ${n} registration(s); token registry ${config.midnight.tokenRegistry || '(none: default names)'}`);
+      console.log(`  Web page   ${config.publicUrl}/\n`);
     }
     console.log(`\nPoint your wallet's custom RPC at http://${host}:${port}\n`);
   }

@@ -7,7 +7,7 @@ const log = require('./log');
 
 const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'POST, GET, OPTIONS',
+  'access-control-allow-methods': 'POST, GET, DELETE, OPTIONS',
   'access-control-allow-headers': '*',
   'access-control-max-age': '86400',
 };
