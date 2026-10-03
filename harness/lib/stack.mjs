@@ -10,7 +10,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const HARNESS_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+export const REPO_DIR = path.dirname(HARNESS_DIR);
 export const COMPOSE_FILE = path.join(HARNESS_DIR, 'compose.yml');
+// The service (profile `service`) lives in a second file of the same compose project.
+export const SERVICE_COMPOSE_FILE = path.join(HARNESS_DIR, 'compose.service.yml');
+export const SERVICE_IMAGE_REPO = 's00056/service';
+export const BASE_IMAGE = 'oven/bun:1.3.11';
 export const ENV_FILE = path.join(HARNESS_DIR, '.env');
 export const STATE_DIR = path.join(HARNESS_DIR, '.state');
 export const STATE_FILE = path.join(STATE_DIR, 'run.json');
@@ -107,20 +112,37 @@ export function otherStacks() {
   return { ours, midnight };
 }
 
-export const compose = (project, args, opts) =>
-  run('docker', ['compose', '-p', project, '-f', COMPOSE_FILE, '--env-file', ENV_FILE, ...args], opts);
+/**
+ * `docker compose` on the harness project. Both files are always passed, so `down` sees every
+ * service; `opts.profile` activates a profile (the service runs under profile `service`).
+ */
+export const compose = (project, args, opts = {}) =>
+  run(
+    'docker',
+    [
+      'compose', '-p', project, '-f', COMPOSE_FILE, '-f', SERVICE_COMPOSE_FILE, '--env-file', ENV_FILE,
+      ...(opts.profile ? ['--profile', opts.profile] : []),
+      ...args,
+    ],
+    opts,
+  );
 
 export function newProjectName() {
   return PROJECT_PREFIX + randomBytes(4).toString('hex');
 }
 
-export function writeEnv(ports) {
+export function writeEnv(ports, { serviceImage } = {}) {
   const lines = [
     `PORT_NODE_RPC=${ports.node}`,
     `PORT_INDEXER=${ports.indexer}`,
     `PORT_PROOF_SERVER=${ports.proofServer}`,
     `APP_INFRA_SECRET=${randomBytes(32).toString('hex')}`,
   ];
+  // compose.service.yml (profile `service`); written in full before the first `compose up`, so the
+  // project's configuration never changes between the Midnight `up` and the service's `up`.
+  if (ports.service) lines.push(`PORT_SERVICE=${ports.service}`, `PORT_SERVICE_WS=${ports.serviceWs}`);
+  if (ports.solanaRpc) lines.push(`PORT_SOLANA_RPC=${ports.solanaRpc}`, `PORT_SOLANA_WS=${ports.solanaWs}`);
+  if (serviceImage) lines.push(`SERVICE_IMAGE=${serviceImage}`);
   fs.writeFileSync(ENV_FILE, lines.join('\n') + '\n', { mode: 0o600 });
 }
 
@@ -131,8 +153,11 @@ export const REQUIRED_IMAGES = [
   'midnightntwrk/proof-server:9.0.0-rc.6',
 ];
 
-export function preflight() {
-  const missing = REQUIRED_IMAGES.filter((img) => run('docker', ['image', 'inspect', img], { allowFail: true, quiet: true }).status !== 0);
+export const imageExists = (img) => run('docker', ['image', 'inspect', img], { allowFail: true, quiet: true }).status === 0;
+
+export function preflight({ withService = false } = {}) {
+  const required = withService ? [...REQUIRED_IMAGES, BASE_IMAGE] : REQUIRED_IMAGES;
+  const missing = required.filter((img) => !imageExists(img));
   if (missing.length) throw new Error(`missing local Docker images (this harness never pulls): ${missing.join(', ')}`);
   const v = spawnSync('solana-test-validator', ['--version'], { encoding: 'utf8' });
   if (v.status !== 0) throw new Error(`solana-test-validator not runnable: ${v.error?.message ?? v.stderr}`);
@@ -308,6 +333,56 @@ export async function stopValidator(pid, log) {
   return !pidAlive(pid);
 }
 
+// ---- the service (Dockerfile at the repo root, compose.service.yml) -----------------------------
+
+/**
+ * `docker build --pull=false -t <tag> <repo>`: only the local base image, never a pull (Q8).
+ * The full build log goes to `logFile`; returns the build time in seconds.
+ */
+export function buildServiceImage(tag, logFile) {
+  const t0 = Date.now();
+  const r = spawnSync('docker', ['build', '--pull=false', '--progress=plain', '-t', tag, REPO_DIR], {
+    encoding: 'utf8',
+    maxBuffer: 256 << 20,
+  });
+  if (logFile) fs.writeFileSync(logFile, `${r.stdout || ''}${r.stderr || ''}`);
+  if (r.status !== 0) {
+    throw new Error(`docker build ${tag} failed (${r.status}): ${(r.stderr || r.stdout || '').trim().slice(-2000)}`);
+  }
+  return Math.round((Date.now() - t0) / 100) / 10;
+}
+
+/** Remove one image tag (the per-run service tag). Build cache layers stay. */
+export function removeImage(tag) {
+  if (!tag || !imageExists(tag)) return true;
+  run('docker', ['rmi', tag], { allowFail: true, quiet: true });
+  return !imageExists(tag);
+}
+
+/** GET <service>/health until HTTP 200 with ok: true (upstream, indexer and decryptor reachable). */
+export async function waitService(serviceUrl, log, { timeoutMs = 120_000 } = {}) {
+  return poll(
+    'service GET /health ok',
+    async () => {
+      const r = await fetch(serviceUrl + '/health', { signal: AbortSignal.timeout(5000) });
+      if (r.status !== 200) return null;
+      const j = await r.json();
+      return j.ok === true ? j : null;
+    },
+    { timeoutMs, log },
+  );
+}
+
+/** The service container of a project (id), or null. */
+export function serviceContainer(project) {
+  const r = run(
+    'docker',
+    ['ps', '-aq', '--filter', `label=com.docker.compose.project=${project}`, '--filter', 'label=com.docker.compose.service=service'],
+    { allowFail: true },
+  );
+  return r.stdout.trim().split('\n').filter(Boolean)[0] ?? null;
+}
+
 // ---- state ------------------------------------------------------------------------------------
 
 export const readState = () => (fs.existsSync(STATE_FILE) ? JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) : null);
@@ -329,5 +404,6 @@ export function urlsFor(ports) {
     solanaRpc: `http://127.0.0.1:${ports.solanaRpc}`,
     solanaWs: `ws://127.0.0.1:${ports.solanaWs}`,
     service: `http://127.0.0.1:${ports.service}`,
+    serviceWs: `ws://127.0.0.1:${ports.serviceWs ?? ports.service + 1}`,
   };
 }

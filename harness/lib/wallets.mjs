@@ -201,7 +201,7 @@ export function facadeSummary(state) {
  * Shielded transfer of `amount` of `tokenHex` from `fromSeedHex` to the shielded address of
  * `toSeedHex` (or to `toAddress`). Returns `{ txId, before, after }`.
  */
-export async function shieldedTransfer({ fromSeedHex, toAddressObj, tokenHex, amount, urls, networkId = NETWORK_ID, dustWaitMs = 300_000, log = console.error }) {
+export async function shieldedTransfer({ fromSeedHex, toAddressObj, tokenHex, amount, urls, networkId = NETWORK_ID, dustWaitMs = 300_000, log = console.error, onSubmitted }) {
   // Fees are paid in DUST valued at the latest INDEXED block's timestamp. `up` waits for the indexer
   // to pass genesis (whose timestamp is 2025-08-05, i.e. zero generated DUST), but if balancing still
   // reports insufficient funds, rebuild the wallet and retry: a failed attempt may leave the shielded
@@ -239,6 +239,7 @@ export async function shieldedTransfer({ fromSeedHex, toAddressObj, tokenHex, am
     log(`[transfer] proved in ${((Date.now() - t0) / 1000).toFixed(1)} s; submitting...`);
     const txId = await f.wallet.submitTransaction(finalized);
     log(`[transfer] submitted, txId ${txId}`);
+    onSubmitted?.(txId); // e.g. the e2e starts its 'appears within 30 s' clock here
     // Wait for the sender's view to settle (no pending tx), so its change coin is visible.
     const after = await withTimeout(
       Rx.firstValueFrom(
