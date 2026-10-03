@@ -8,7 +8,9 @@
   },
   "scripts": {
     "start": "node proxy.js config.json",
-    "test": "node test/run.js"
+    "test": "node test/run.js && node --test --test-concurrency=4 \"test/unit/*.test.js\" \"test/integration/*.test.js\"",
+    "test:unit": "node --test \"test/unit/*.test.js\"",
+    "test:integration": "node --test --test-concurrency=4 \"test/integration/*.test.js\""
   },
   "engines": {
     "node": ">=22"

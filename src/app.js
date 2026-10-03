@@ -5,7 +5,8 @@ const path = require('path');
 const spl = require('@solana/spl-token');
 const log = require('./log');
 const { loadConfig } = require('./config');
-const { buildTokenState } = require('./tokens/state');
+const { createTokenManager } = require('./tokens/manager');
+const { watchConfig } = require('./config-watch');
 const { uiAmountString } = require('./amounts');
 const { createPlanner } = require('./rpc/planners');
 const { createUpstream } = require('./rpc/upstream');
@@ -13,10 +14,19 @@ const { createRpcHandler } = require('./rpc/handler');
 const { createWsProxy } = require('./ws-proxy');
 const { createServers } = require('./server');
 
-function createApp(config) {
+// Keys a running process cannot change (a restart applies them).
+const RESTART_KEYS = ['upstream', 'upstreamWs', 'host', 'port', 'wsPort', 'publicUrl'];
+
+/**
+ * createApp(config, { configPath?, watch?, reloadIntervalMs? })
+ * With `watch` and a `configPath`, edits to the file are applied live.
+ */
+function createApp(config, opts = {}) {
   log.configure(config.log);
-  let state = buildTokenState(config.tokens, { publicUrl: config.publicUrl });
-  const getState = () => state;
+  const tokens = createTokenManager({ publicUrl: config.publicUrl, staticSpecs: config.tokens });
+  const getState = tokens.getState;
+  let current = config;
+  let stopWatching = () => {};
 
   const upstream = createUpstream(config.upstream);
   const handleRpc = createRpcHandler({ plan: createPlanner(getState), upstream });
@@ -39,7 +49,7 @@ function createApp(config) {
     console.log(`  RPC        http://${host}:${port}   (websockets also on :${wsPort})`);
     console.log(`  upstream   ${config.upstream}`);
     console.log(`  upstream ws ${config.upstreamWs}\n`);
-    for (const [mint, m] of state.mints) {
+    for (const [mint, m] of getState().mints) {
       console.log(`  ${m.symbol}  mint ${mint}  (${m.programId === spl.TOKEN_2022_PROGRAM_ID.toBase58() ? 'Token-2022' : 'Token'})`);
       console.log(`        metadata uri ${m.uri}`);
       for (const h of m.holders) console.log(`        token account ${h.address}  balance ${uiAmountString(h.amount, m.decimals)}`);
@@ -47,14 +57,35 @@ function createApp(config) {
     console.log(`\nPoint your wallet's custom RPC at http://${host}:${port}\n`);
   }
 
-  async function close() {
-    wsProxy.close();
-    await Promise.all([server, wsServer].map((s) => new Promise((r) => (s.listening ? s.close(() => r()) : r()))));
-    server.closeAllConnections?.();
-    wsServer.closeAllConnections?.();
+  /** Applies a reloaded config: static tokens and log level; warns about the rest. */
+  function applyReload(next) {
+    const needRestart = RESTART_KEYS.filter((k) => JSON.stringify(next[k]) !== JSON.stringify(current[k]));
+    log.configure(next.log);
+    tokens.setStaticSpecs(next.tokens);
+    current = { ...current, log: next.log, tokens: next.tokens };
+    log.warn(`config reloaded: ${next.tokens.length} static token(s)${needRestart.length ? `; restart needed to apply: ${needRestart.join(', ')}` : ''}`);
   }
 
-  return { config, getState, server, wsServer, listen, banner, close };
+  if (opts.watch && opts.configPath) {
+    stopWatching = watchConfig(opts.configPath, {
+      load: () => loadConfig(opts.configPath),
+      onReload: applyReload,
+      onError: (err) => log.warn(`config reload failed, keeping the previous config: ${err.message}`),
+      intervalMs: opts.reloadIntervalMs,
+    });
+  }
+
+  async function close() {
+    stopWatching();
+    tokens.stop();
+    wsProxy.close();
+    const closing = [server, wsServer].map((s) => new Promise((r) => (s.listening ? s.close(() => r()) : r())));
+    server.closeAllConnections();
+    wsServer.closeAllConnections();
+    await Promise.all(closing);
+  }
+
+  return { config, getState, tokens, applyReload, server, wsServer, listen, banner, close };
 }
 
 async function main(configArg) {
@@ -68,7 +99,7 @@ async function main(configArg) {
   }
   let app;
   try {
-    app = createApp(config);
+    app = createApp(config, { configPath, watch: process.env.CONFIG_WATCH !== '0' });
   } catch (e) {
     console.error(`config error: ${e.message}`);
     process.exit(1);
