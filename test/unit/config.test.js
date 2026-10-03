@@ -141,3 +141,13 @@ test('loadConfig reads a file and applies the environment', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('config.example.json is valid once the wallet placeholder is replaced', () => {
+  const raw = JSON.parse(fs.readFileSync(path.join(REPO, 'config.example.json'), 'utf8').replace('REPLACE_WITH_YOUR_WALLET_ADDRESS', wallet));
+  const c = normalizeConfig(raw, { baseDir: REPO, env: {} });
+  assert.equal(c.midnight.networkId, 'undeployed');
+  assert.equal(c.midnight.tokenRegistry, path.join(REPO, 'tokens/tokens.undeployed.json'));
+  assert.equal(c.tokens.length, 1);
+  const { tokens, ...midnightOnly } = raw; // eslint-disable-line no-unused-vars
+  assert.deepEqual(normalizeConfig(midnightOnly, { baseDir: REPO, env: {} }).tokens, [], 'tokens can be dropped when midnight is set');
+});
