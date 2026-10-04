@@ -1,0 +1,48 @@
+# The solana-token-injector service, in the same compose project as harness/compose.yml.
+#
+# Started by `node harness/cli.mjs up --with-service` (and by `npm run e2e`), which first builds the
+# image `s00056/service:<run-id>` from the repo's Dockerfile with `docker build --pull=false`, so
+# nothing is pulled; `down` removes the containers, the data volume and that image tag.
+# Profile `service`: a plain `up` (Midnight + validator only) does not start it.
+#
+# harness/.env (written by the CLI) provides the ports and the image tag; the defaults below only
+# keep `compose` able to parse the file when a variable is missing (e.g. during `down`).
+#
+# The service reaches the indexer inside the compose network (`indexer:8088`) and the native
+# solana-test-validator on the host through host.docker.internal (the validator listens on all
+# interfaces, questions file Q20). Published on 127.0.0.1 only: RPC/page/API on PORT_SERVICE,
+# Solana websockets on PORT_SERVICE_WS (= PORT_SERVICE + 1, what web3.js expects).
+
+services:
+  service:
+    image: ${SERVICE_IMAGE:-s00056/service:unset}
+    pull_policy: never
+    profiles: ["service"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    depends_on:
+      indexer:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:${PORT_SERVICE:-10000}:8899"
+      - "127.0.0.1:${PORT_SERVICE_WS:-10001}:8900"
+    volumes:
+      - service-data:/data
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8899"
+      PUBLIC_URL: "http://127.0.0.1:${PORT_SERVICE:-10000}"
+      UPSTREAM: "http://host.docker.internal:${PORT_SOLANA_RPC:-10000}"
+      UPSTREAM_WS: "ws://host.docker.internal:${PORT_SOLANA_WS:-10001}"
+      DATA_DIR: "/data"
+      MIDNIGHT_NETWORK_ID: "undeployed"
+      MIDNIGHT_INDEXER_HTTP: "http://indexer:8088/api/v4/graphql"
+      MIDNIGHT_INDEXER_WS: "ws://indexer:8088/api/v4/graphql/ws"
+      DECRYPTOR_BIN: "/usr/local/bin/midnight-esk-decrypt"
+      LOG: "${SERVICE_LOG:-true}"
+
+volumes:
+  service-data:

@@ -1,0 +1,55 @@
+[package]
+name        = "midnight-esk-decrypt"
+version     = "0.1.0"
+description = "Decrypts Midnight 2.x (ledger 9) shielded outputs with a viewing key (zswap encryption secret key); JSON lines over stdin/stdout"
+edition     = "2024"
+license     = "Apache-2.0"
+publish     = false
+
+[[bin]]
+name = "midnight-esk-decrypt"
+path = "src/main.rs"
+
+[lib]
+name = "midnight_esk_decrypt"
+path = "src/lib.rs"
+
+# Ledger v9 crates, named and pinned exactly as midnight-indexer v4.4.0-rc.1
+# (668ed025; Cargo.toml [workspace.dependencies] and [patch.crates-io]).
+# Only the v9 side is needed here; the v8 aliases are left out.
+[dependencies]
+midnight-base-crypto_v1      = { package = "midnight-base-crypto", version = "1" }
+midnight-coin-structure_v3   = { package = "midnight-coin-structure", version = "3" }
+midnight-ledger_v9           = { package = "midnight-ledger-v9", version = "1.0" }
+midnight-serialize_v1        = { package = "midnight-serialize", version = "1" }
+midnight-storage-core_v1     = { package = "midnight-storage-core", version = "1.2", features = [ "layout-v2", "gc-v1" ] }
+midnight-transient-crypto_v3 = { package = "midnight-transient-crypto", version = "3" }
+midnight-zswap_v9            = { package = "midnight-zswap", version = "9" }
+bech32                       = { version = "0.12" }
+hex                          = { version = "0.4" }
+serde                        = { version = "1.0", features = [ "derive" ] }
+serde_json                   = { version = "1.0" }
+
+[dev-dependencies]
+bip32 = { version = "0.5" }
+
+[profile.release]
+# Keep panics as unwinds so a bad input can be caught per request (catch_unwind).
+panic = "unwind"
+
+# Copied verbatim from midnight-indexer v4.4.0-rc.1 Cargo.toml (ledger 9.1.0.0-rc.3
+# patch set). Entries only used by the indexer's v8 line are kept so the
+# resolution stays identical; cargo warns that they are unused.
+[patch.crates-io]
+midnight-base-crypto          = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "base-crypto-1.1.0-rc.2" }
+midnight-base-crypto-derive   = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "base-crypto-derive-1.1.0-rc.2" }
+midnight-serialize            = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "serialize-1.2.0-rc.1" }
+midnight-zkir                 = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "zkir-2.2.0-rc.3" }
+midnight-transient-crypto-old = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "transient-crypto-2.2.0-rc.1", package = "midnight-transient-crypto", version = "2.2.0" }
+midnight-ledger-v9            = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "crate-ledger-9.1.0.0-rc.3" }
+midnight-zswap_v9             = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "zswap-9.0.0-rc.3",           package = "midnight-zswap",           version = "9.0.0" }
+midnight-coin-structure_v3    = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "coin-structure-3.0.0-rc.1",  package = "midnight-coin-structure",  version = "3.0.0" }
+midnight-transient-crypto_v3  = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "transient-crypto-3.0.0-rc.2", package = "midnight-transient-crypto", version = "3.0.0" }
+midnight-onchain-runtime_v4   = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-runtime-4.0.0-rc.2", package = "midnight-onchain-runtime", version = "4.0.0" }
+midnight-onchain-state_v4     = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-state-4.0.0-rc.3",   package = "midnight-onchain-state",   version = "4.0.0" }
+midnight-onchain-vm_v4        = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-vm-4.0.0-rc.2",      package = "midnight-onchain-vm",      version = "4.0.0" }

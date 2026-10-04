@@ -1,0 +1,24 @@
+{
+  "network": "undeployed",
+  "note": "Genesis shielded token types of the local undeployed network, confirmed by the harness (lane A gate A1, 2026-10-03): each dev seed 00..01-00..03 holds 00..00 = 250000000000000 (5 x 5e13), 00..01 = 50000000000000 and 00..02 = 50000000000000. Names are local labels. Midnight has no on-chain decimals for shielded tokens; 6 follows the NIGHT/STAR convention.",
+  "tokens": {
+    "0000000000000000000000000000000000000000000000000000000000000000": {
+      "name": "Midnight Test Token",
+      "symbol": "MNTT",
+      "decimals": 6,
+      "description": "Local undeployed network genesis shielded token (type 00..00), shown display-only by solana-token-injector"
+    },
+    "0000000000000000000000000000000000000000000000000000000000000001": {
+      "name": "Midnight Alt Token 1",
+      "symbol": "MNA1",
+      "decimals": 6,
+      "description": "Local undeployed network genesis shielded token (type 00..01), shown display-only by solana-token-injector"
+    },
+    "0000000000000000000000000000000000000000000000000000000000000002": {
+      "name": "Midnight Alt Token 2",
+      "symbol": "MNA2",
+      "decimals": 6,
+      "description": "Local undeployed network genesis shielded token (type 00..02), shown display-only by solana-token-injector"
+    }
+  }
+}
