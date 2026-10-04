@@ -1,0 +1,109 @@
+{
+  "format": "solana-token-injector account registration v1",
+  "maxBytes": 512,
+  "firstLineBytes": 45,
+  "valid": [
+    {
+      "fields": {
+        "origin": "http://127.0.0.1:18899",
+        "networkId": "undeployed",
+        "solanaAddress": "Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R",
+        "accountAddress": "453b2b8d0000000000000000000000000000000000000000000000000000375a",
+        "expiresAt": 1791203696
+      },
+      "text": "solana-token-injector account registration v1\nShow my Midnight account in my Solana wallet\nRPC http://127.0.0.1:18899\nMidnight network undeployed\nWallet Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R\nAccount 453b2b8d0000000000000000000000000000000000000000000000000000375a\nExpires 2026-10-05 12:34:56 UTC\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds.",
+      "bytes": 407,
+      "sha256": "b4a730ef50b189879b7165c103bf53a277c244d9eb61a49596775cd0125f3372",
+      "signer": {
+        "publicKeyHex": "8f3b015adceba16afd8d4e49a56dc374768f33760954e8c2a7fdc2bbeccc9ae8",
+        "note": "test key: seed sha256(\"aa00059 device A\")"
+      },
+      "signature": "f1acfb16afd859beb390f5f2da7673cd380dacad3dfa8be40c4ee57f9a560b850f79bbc2b0ede135473dd28eae38da3adc262f4bd132701a3f409055e3914d0c"
+    },
+    {
+      "fields": {
+        "origin": "https://rpc.example.org",
+        "networkId": "stagenet",
+        "solanaAddress": "GBLE9NNB1wHhGbAPsXrVqMGsNZ3zH1AmMLY5PdAD7xp6",
+        "accountAddress": "735318b335100c92f416f1f02e7bfd1a38fcc7b5be23663953a4f08c3373c78e",
+        "expiresAt": 1798761599
+      },
+      "text": "solana-token-injector account registration v1\nShow my Midnight account in my Solana wallet\nRPC https://rpc.example.org\nMidnight network stagenet\nWallet GBLE9NNB1wHhGbAPsXrVqMGsNZ3zH1AmMLY5PdAD7xp6\nAccount 735318b335100c92f416f1f02e7bfd1a38fcc7b5be23663953a4f08c3373c78e\nExpires 2026-12-31 23:59:59 UTC\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds.",
+      "bytes": 406,
+      "sha256": "683ea97e8fbaf5b701d260996977176048e690796b61fd5f121d3c5cc4d3d6f3",
+      "signer": {
+        "publicKeyHex": "e184da028384d9cf99d115dd2d7f9a6722de63bf44fc898d674b227e5629b7b7",
+        "note": "test key: seed sha256(\"aa00059 device B\")"
+      },
+      "signature": "3949c6a64fc9d173cf8713ef50c1bc8975649ef8e094ba58efd268b08638ee05fc69957abb6812c7a56354ccef607f4455e75cbcc84c0c8294f83319b458b70e"
+    },
+    {
+      "fields": {
+        "origin": "http://[::1]:1234",
+        "networkId": "undeployed",
+        "solanaAddress": "9v3UAdBkcxbrc82t594qhrEYAMuCaemwbm1TnqpLEswj",
+        "accountAddress": "7e283606e93040fc5b25e8867e835570ed4cfffe76dfddeb209571d921d459de",
+        "expiresAt": 1803772800
+      },
+      "text": "solana-token-injector account registration v1\nShow my Midnight account in my Solana wallet\nRPC http://[::1]:1234\nMidnight network undeployed\nWallet 9v3UAdBkcxbrc82t594qhrEYAMuCaemwbm1TnqpLEswj\nAccount 7e283606e93040fc5b25e8867e835570ed4cfffe76dfddeb209571d921d459de\nExpires 2027-02-28 00:00:00 UTC\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds.",
+      "bytes": 402,
+      "sha256": "0b0a2dbbed7125751d22bec2bf226cf5c917721724a60a0bf30d33d1a6ba5da8",
+      "signer": {
+        "publicKeyHex": "847411bd5e8fab6390d7413b29e95ef309ce56e08db636fd07dd673bed67a086",
+        "note": "test key: seed sha256(\"aa00059 device C\")"
+      },
+      "signature": "8638447d2e04723195825b3e60990eae001b01422dc612c6a9de33b3ebc33d6237de43a3753bc14e88a238a56dbf76cf0eb0c11a554c0653169f171f2fe5250f"
+    },
+    {
+      "fields": {
+        "origin": "https://rpc.example.org:8443",
+        "networkId": "preprod",
+        "solanaAddress": "Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R",
+        "accountAddress": "960f049b14a474d0ebc1396bf22dbed8f292f499db139b74aa663d0fcebdc4c2",
+        "expiresAt": 1893488707
+      },
+      "text": "solana-token-injector account registration v1\nShow my Midnight account in my Solana wallet\nRPC https://rpc.example.org:8443\nMidnight network preprod\nWallet Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R\nAccount 960f049b14a474d0ebc1396bf22dbed8f292f499db139b74aa663d0fcebdc4c2\nExpires 2030-01-01 09:05:07 UTC\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds.",
+      "bytes": 410,
+      "sha256": "400eaf1566f41e11e3b38d0b5b2114ac356e273dc221ed1c9ba6f9aff40bdfba",
+      "signer": {
+        "publicKeyHex": "8f3b015adceba16afd8d4e49a56dc374768f33760954e8c2a7fdc2bbeccc9ae8",
+        "note": "test key: seed sha256(\"aa00059 device A\")"
+      },
+      "signature": "62a60c907ec9aea72ed9a00d6b37ac0caabd90b10b2102144a57dabb1ccc8b50d79a042a8b95528b0d0e8b033da4bb10e662c122a0d613bc3d51fd9487e10202"
+    }
+  ],
+  "invalid": [
+    {
+      "why": "CRLF line ends",
+      "text": "solana-token-injector account registration v1\r\nShow my Midnight account in my Solana wallet\r\nRPC http://127.0.0.1:18899\r\nMidnight network undeployed\r\nWallet Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R\r\nAccount 453b2b8d0000000000000000000000000000000000000000000000000000375a\r\nExpires 2026-10-05 12:34:56 UTC\r\nThe RPC will see this account's balances.\r\nThis signature authorises nothing on chain and moves no funds."
+    },
+    {
+      "why": "trailing LF",
+      "text": "solana-token-injector account registration v1\nShow my Midnight account in my Solana wallet\nRPC http://127.0.0.1:18899\nMidnight network undeployed\nWallet Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R\nAccount 453b2b8d0000000000000000000000000000000000000000000000000000375a\nExpires 2026-10-05 12:34:56 UTC\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds.\n"
+    },
+    {
+      "why": "origin with a trailing slash",
+      "text": "solana-token-injector account registration v1\nShow my Midnight account in my Solana wallet\nRPC http://127.0.0.1:18899/\nMidnight network undeployed\nWallet Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R\nAccount 453b2b8d0000000000000000000000000000000000000000000000000000375a\nExpires 2026-10-05 12:34:56 UTC\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds."
+    },
+    {
+      "why": "origin with the default port",
+      "text": "solana-token-injector account registration v1\nShow my Midnight account in my Solana wallet\nRPC http://h:80\nMidnight network undeployed\nWallet Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R\nAccount 453b2b8d0000000000000000000000000000000000000000000000000000375a\nExpires 2026-10-05 12:34:56 UTC\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds."
+    },
+    {
+      "why": "uppercase account hex",
+      "text": "solana-token-injector account registration v1\nShow my Midnight account in my Solana wallet\nRPC http://127.0.0.1:18899\nMidnight network undeployed\nWallet Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R\nAccount 453B2B8D0000000000000000000000000000000000000000000000000000375A\nExpires 2026-10-05 12:34:56 UTC\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds."
+    },
+    {
+      "why": "impossible date",
+      "text": "solana-token-injector account registration v1\nShow my Midnight account in my Solana wallet\nRPC http://127.0.0.1:18899\nMidnight network undeployed\nWallet Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R\nAccount 453b2b8d0000000000000000000000000000000000000000000000000000375a\nExpires 2026-02-30 12:00:00 UTC\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds."
+    },
+    {
+      "why": "no UTC",
+      "text": "solana-token-injector account registration v1\nShow my Midnight account in my Solana wallet\nRPC http://127.0.0.1:18899\nMidnight network undeployed\nWallet Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R\nAccount 453b2b8d0000000000000000000000000000000000000000000000000000375a\nExpires 2026-10-05 12:34:56\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds."
+    },
+    {
+      "why": "first line of a Passport arm message",
+      "text": "Site: Night Market - local   \nShow my Midnight account in my Solana wallet\nRPC http://127.0.0.1:18899\nMidnight network undeployed\nWallet Ae7V9kXonZirdCA3AtgTMp18YctsfEejbCApTMfvGZ5R\nAccount 453b2b8d0000000000000000000000000000000000000000000000000000375a\nExpires 2026-10-05 12:34:56 UTC\nThe RPC will see this account's balances.\nThis signature authorises nothing on chain and moves no funds."
+    }
+  ]
+}
