@@ -10,7 +10,7 @@ const { startMockIndexer } = require('./mock-indexer');
 const { createFakeMap, FAKE_DECRYPTOR } = require('./fake-map');
 const { startService, makeTempDir, ROOT } = require('./service');
 
-async function startStack({ networkId = 'undeployed', tokens, midnightExtra = {}, configExtra = {} } = {}) {
+async function startStack({ networkId = 'undeployed', tokens, midnightExtra = {}, configExtra = {}, beforeStart } = {}) {
   const dir = makeTempDir('sti-stack-');
   const upstream = await startMockUpstream();
   const indexer = await startMockIndexer();
@@ -36,6 +36,7 @@ async function startStack({ networkId = 'undeployed', tokens, midnightExtra = {}
   };
   if (!fs.existsSync(config.midnight.tokenRegistry)) delete config.midnight.tokenRegistry;
   const env = { FAKE_DECRYPTOR_MAP: map.file };
+  if (beforeStart) await beforeStart({ upstream, indexer, dir, config });
   let svc = await startService({ config, dir, env });
 
   let rawSeq = 0;
