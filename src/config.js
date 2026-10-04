@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { staticTokenSpecs } = require('./tokens/static');
 const { loadTokenRegistry } = require('./tokens/registry');
+const { loadJourneyRegistry } = require('./tokens/journey-registry');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const NETWORK_ID_RE = /^[a-z0-9-]{1,32}$/;
@@ -70,7 +71,7 @@ function checkUrl(v, name, protocols) {
   return v;
 }
 
-const MIDNIGHT_ENV = ['MIDNIGHT_NETWORK_ID', 'MIDNIGHT_INDEXER_HTTP', 'MIDNIGHT_INDEXER_WS', 'DECRYPTOR_BIN', 'TOKEN_REGISTRY'];
+const MIDNIGHT_ENV = ['MIDNIGHT_NETWORK_ID', 'MIDNIGHT_INDEXER_HTTP', 'MIDNIGHT_INDEXER_WS', 'DECRYPTOR_BIN', 'TOKEN_REGISTRY', 'JOURNEY_REGISTRY'];
 // AA 00059: the I-4 network id rule (the registration text carries it).
 const ACCOUNT_NETWORK_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -151,6 +152,9 @@ function normalizeMidnight(rawM, { env, fromFile, fromEnv }) {
     if (fs.existsSync(bundled)) tokenRegistry = bundled;
   }
   const registry = tokenRegistry ? loadTokenRegistry(tokenRegistry, { networkId }) : null;
+  // AA 00059 P4: the journey token registry (00057 I-1), its own file and schema.
+  const journeyRegistry = env.JOURNEY_REGISTRY ? fromEnv(env.JOURNEY_REGISTRY) : m.journeyRegistry ? fromFile(m.journeyRegistry) : null;
+  const journey = journeyRegistry ? loadJourneyRegistry(journeyRegistry, { networkId }) : null;
 
   const num = (k, def, min) => {
     const v = m[k] === undefined ? def : Number(m[k]);
@@ -166,6 +170,9 @@ function normalizeMidnight(rawM, { env, fromFile, fromEnv }) {
     decryptorBin,
     tokenRegistry,
     registry,
+    journeyRegistry,
+    journey,
+    journeyCheckDeadlineMs: num('journeyCheckDeadlineMs', 60000, 0),
     reconnectMinMs,
     reconnectMaxMs,
     decryptorTimeoutMs: num('decryptorTimeoutMs', 30000, 100),

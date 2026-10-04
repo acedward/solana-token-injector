@@ -8,6 +8,7 @@ const { loadConfig } = require('./config');
 const { createTokenManager } = require('./tokens/manager');
 const { midnightTokenSpecs } = require('./tokens/midnight');
 const { registryLookup } = require('./tokens/registry');
+const { loadJourneyRegistry, checkJourneyRegistry, journeyLookup, combineLookups } = require('./tokens/journey-registry');
 const { watchConfig } = require('./config-watch');
 const { uiAmountString } = require('./amounts');
 const { createPlanner } = require('./rpc/planners');
@@ -23,7 +24,7 @@ const { createApiRoutes } = require('./api');
 
 // Keys a running process cannot change (a restart applies them).
 const RESTART_KEYS = ['upstream', 'upstreamWs', 'host', 'port', 'wsPort', 'publicUrl', 'dataDir'];
-const MIDNIGHT_RESTART_KEYS = ['networkId', 'indexerHttp', 'indexerWs', 'decryptorBin', 'reconnectMinMs', 'reconnectMaxMs', 'decryptorTimeoutMs', 'syncMinMs', 'syncQuietMs'];
+const MIDNIGHT_RESTART_KEYS = ['networkId', 'indexerHttp', 'indexerWs', 'decryptorBin', 'reconnectMinMs', 'reconnectMaxMs', 'decryptorTimeoutMs', 'syncMinMs', 'syncQuietMs', 'journeyRegistry'];
 
 const accountsEnabled = (config) => !!(config.midnight && config.midnight.accounts && config.midnight.accounts.enabled);
 
@@ -35,7 +36,11 @@ const accountsEnabled = (config) => !!(config.midnight && config.midnight.accoun
 function createApp(config, opts = {}) {
   log.configure(config.log);
   let current = config;
-  let lookup = registryLookup(config.midnight && config.midnight.registry);
+  // Token names: the journey registry (I-1, shown per I-4b) over the injector's own token registry.
+  let tokenRegistry = config.midnight && config.midnight.registry;
+  let journey = (config.midnight && config.midnight.journey) || null;
+  const makeLookup = () => combineLookups(journeyLookup(journey), registryLookup(tokenRegistry));
+  let lookup = makeLookup();
   // Registrations (with their per-key totals) are attached by the registry service.
   let registrations = () => [];
   const midnightSpecs = () =>
@@ -125,6 +130,7 @@ function createApp(config, opts = {}) {
       console.log(`  Midnight   network ${config.midnight.networkId}, indexer ${config.midnight.indexerHttp}`);
       console.log(`             ${n} registration(s); token registry ${config.midnight.tokenRegistry || '(none: default names)'}`);
       if (accounts) console.log(`             ${accounts.store.list().length} account registration(s) (Passport accounts, ${config.midnight.accounts.pollMs} ms poll)`);
+      if (journey) console.log(`             journey token registry ${config.midnight.journeyRegistry} (${journey.tokens.size} bridged colour(s))`);
       console.log(`  Web page   ${config.publicUrl}/\n`);
     }
     console.log(`\nPoint your wallet's custom RPC at http://${host}:${port}\n`);
@@ -141,7 +147,10 @@ function createApp(config, opts = {}) {
       for (const k of MIDNIGHT_RESTART_KEYS) if (next.midnight[k] !== current.midnight[k]) needRestart.push(`midnight.${k}`);
     }
     log.configure(next.log);
-    if (current.midnight && next.midnight) lookup = registryLookup(next.midnight.registry);
+    if (current.midnight && next.midnight) {
+      tokenRegistry = next.midnight.registry;
+      lookup = makeLookup();
+    }
     tokens.setStaticSpecs(next.tokens);
     current = { ...current, log: next.log, tokens: next.tokens, midnight: current.midnight && next.midnight ? { ...current.midnight, registry: next.midnight.registry, tokenRegistry: next.midnight.tokenRegistry } : current.midnight };
     const reg = current.midnight && current.midnight.registry ? `, ${current.midnight.registry.tokens.size} registry token type(s)` : '';
@@ -158,6 +167,29 @@ function createApp(config, opts = {}) {
     stopWatching.push(watchConfig(opts.configPath, watchOpts));
     // The token registry file is watched too: editing a name needs no restart.
     if (config.midnight && config.midnight.tokenRegistry) stopWatching.push(watchConfig(config.midnight.tokenRegistry, watchOpts));
+    // AA 00059 P4: the journey registry too; an edit is checked against the upstream like at start,
+    // and an invalid one keeps the previous registry.
+    if (config.midnight && config.midnight.journeyRegistry) {
+      const file = config.midnight.journeyRegistry;
+      stopWatching.push(
+        watchConfig(file, {
+          load: () => loadJourneyRegistry(file, { networkId: config.midnight.networkId }),
+          onReload: (next) => {
+            checkJourneyRegistry(next, upstream, { deadlineMs: config.midnight.journeyCheckDeadlineMs }).then(
+              () => {
+                journey = next;
+                lookup = makeLookup();
+                tokens.invalidate();
+                log.warn(`journey token registry reloaded: ${next.tokens.size} bridged colour(s)`);
+              },
+              (err) => log.warn(`journey token registry reload failed, keeping the previous one: ${err.message}`),
+            );
+          },
+          onError: (err) => log.warn(`journey token registry reload failed, keeping the previous one: ${err.message}`),
+          intervalMs: opts.reloadIntervalMs,
+        }),
+      );
+    }
   }
 
   async function close() {
@@ -184,6 +216,15 @@ async function main(configArg) {
   } catch (e) {
     console.error(`config error: ${e.message}`);
     process.exit(1);
+  }
+  // AA 00059 P4: the journey registry must match the upstream (genesis hash, classic SPL mints, decimals).
+  if (config.midnight && config.midnight.journey) {
+    try {
+      await checkJourneyRegistry(config.midnight.journey, createUpstream(config.upstream), { deadlineMs: config.midnight.journeyCheckDeadlineMs });
+    } catch (e) {
+      console.error(`startup error: ${e.message}`);
+      process.exit(1);
+    }
   }
   let nightMarket = null;
   if (accountsEnabled(config)) {
