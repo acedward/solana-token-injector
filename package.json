@@ -13,7 +13,8 @@
     "test:integration": "node --test --test-concurrency=4 \"test/integration/*.test.js\"",
     "e2e": "node harness/cli.mjs e2e",
     "harness:install": "npm --prefix harness ci --no-audit --no-fund",
-    "vendor:check": "bash vendor/night-market/build.sh --check"
+    "vendor:check": "bash vendor/night-market/build.sh --check",
+    "e2e:accounts": "node harness/nm/gate.mjs --mode e2e"
   },
   "engines": {
     "node": ">=22"

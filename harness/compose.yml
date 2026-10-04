@@ -58,7 +58,8 @@ services:
     # midnightntwrk/indexer-standalone:4.4.0-rc.1 (amd64 only; runs emulated on this arm64 host).
     # The standalone build always runs the wallet-indexer (viewing-key `connect` sessions);
     # no feature env is needed (indexer-standalone/src/main.rs spawns wallet_app::run).
-    image: midnightntwrk/indexer-standalone@sha256:5d79f3a20da9ed86236c7f7dc9d93b1beeb0b0c47c9c43a791041322eb80b74e
+    # AA 00059 P5.4: INDEXER_IMAGE overrides it (default unchanged); nothing is pulled.
+    image: ${INDEXER_IMAGE:-midnightntwrk/indexer-standalone@sha256:5d79f3a20da9ed86236c7f7dc9d93b1beeb0b0c47c9c43a791041322eb80b74e}
     platform: linux/amd64
     pull_policy: never
     cap_drop: [ALL]

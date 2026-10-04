@@ -8,11 +8,19 @@
 //   bun /probe/page-balance.ts balances --who A|B
 //   bun /probe/page-balance.ts withdraw-partial --who A --amount <base units> [--symbol twUSDC]
 //   bun /probe/page-balance.ts secure --who A
+//   bun /probe/page-balance.ts rotate --who A --to fresh     (P5 A6: a page that got the wallet to sign
+//        "Rotate encryption key / New key <K2>" proves and pays it itself, through a third party, as
+//        market-flows.ts `hostileRotate` does; K2's secret is written to $STATE_DIR/rotated-<who>.secret,
+//        mode 600, never printed)
+//   bun /probe/page-balance.ts rotate --who A --to opening   ("Restore my encryption key", the page's
+//        restoreEncryptionKey through the relay: the opening key back)
+//   bun /probe/page-balance.ts cancel --who A                ("Cancel all open offers": the page's
+//        cancelOpenApprovals, a rotation to the SAME key)
 //
 // Prints one JSON line on stdout. Env: RELAY_URL, INDEXER_URL, NETWORK, STATE_DIR, TOKENS_FILE.
 // The device seeds and the inbox secret stay in $STATE_DIR (mode 600, never printed).
 
-import { readFileSync } from 'node:fs';
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import nacl from '/app/node_modules/tweetnacl/nacl-fast.js';
@@ -27,9 +35,19 @@ import {
   type NetworkName,
   type StoredCoin,
 } from '/app/packages/core/src/index.ts';
-import { ChainReader } from '/app/web/src/chain/indexer.ts';
+import { ChainReader, indexerWsUrlFor } from '/app/web/src/chain/indexer.ts';
+import {
+  callContext,
+  ed25519DeviceOf,
+  findUseCounter,
+  generateEncKeyPairPortable,
+  restoreEncKeyRequest,
+} from '/app/packages/core/src/passport/index.ts';
+import { openThirdParty } from '/app/test/stack/p6/third-party.ts';
 import {
   awaitChange,
+  cancelOpenApprovals,
+  restoreEncryptionKey,
   secureChange,
   syncAccount,
   unconfirmedNotes,
@@ -179,6 +197,60 @@ async function main() {
       after: view(sync),
       seconds: (Date.now() - t0) / 1000,
     };
+  }
+  if (cmd === 'rotate') {
+    const to = opt('to');
+    const before = await chain.accountState(account);
+    if (!before) throw new Error('no account state');
+    let newKey: string;
+    let txId: string;
+    if (to === 'fresh') {
+      const k = generateEncKeyPairPortable();
+      newKey = bytesToHex(k.publicKey);
+      const secretFile = join(STATE_DIR, `rotated-${who}.secret`);
+      writeFileSync(secretFile, `${bytesToHex(k.secretKey)}\n`, { mode: 0o600 });
+      chmodSync(secretFile, 0o600);
+      const tp = await openThirdParty({
+        seedFile: process.env.THIRD_PARTY_SEED_FILE ?? '/run/nm/third.seed',
+        networkId: PROFILE.midnightNetworkId,
+        indexerUrl: INDEXER_URL,
+        indexerWsUrl: indexerWsUrlFor(INDEXER_URL),
+        nodeWsUrl: process.env.NODE_WS_URL ?? PROFILE.midnight.nodeWsUrl,
+        contractProofServerUrl: process.env.CONTRACT_PROOF_SERVER_URL ?? 'http://proof-server-rc8:6300',
+        dustProofServerUrl: process.env.DUST_PROOF_SERVER_URL ?? 'http://proof-server:6300',
+        managedPath: process.env.MIDNIGHT_MANAGED_PATH ?? '/app/vendor/passport/contract/contracts/managed',
+      });
+      try {
+        const view = before;
+        const device = ed25519DeviceOf(signer, { network: NETWORK, tokens });
+        const counter = findUseCounter(view.devices, (n: bigint) =>
+          bytesToHex(device.entryAt(hexToBytes(view.account, 32), BigInt(view.deviceEpoch), n)),
+        );
+        if (counter === null) throw new Error(`${who}'s device is not live on its account`);
+        const ctx = callContext({ account: view.account, authNonce: BigInt(view.authNonce), networkSalt: view.networkSalt, encKey: view.encKey });
+        const auth = await device.sign(ctx, restoreEncKeyRequest({ newKey, authNonce: view.authNonce }), counter);
+        txId = (await tp.rotateKey(account, newKey, auth)).txId;
+      } finally {
+        await tp.stop();
+      }
+    } else if (to === 'opening') {
+      newKey = p.encPublic;
+      txId = (await restoreEncryptionKey(pg, account)).txId;
+      pg.flush();
+    } else throw new Error('--to must be fresh or opening');
+    let now = await chain.accountState(account);
+    for (let i = 0; i < 40 && now?.encKey !== newKey; i++) {
+      await sleep(3_000);
+      now = await chain.accountState(account);
+    }
+    return { cmd, to, txId, newKeyFingerprint: newKey.slice(0, 8), chainShowsNewKey: now?.encKey === newKey, authNonce: now?.authNonce, seconds: (Date.now() - t0) / 1000 };
+  }
+  if (cmd === 'cancel') {
+    const before = await chain.accountState(account);
+    const r = await cancelOpenApprovals(pg, account);
+    pg.flush();
+    const now = await chain.accountState(account);
+    return { cmd, txId: r.txId, authNonceBefore: before?.authNonce, authNonce: r.authNonce, keyUnchanged: now?.encKey === before?.encKey, seconds: (Date.now() - t0) / 1000 };
   }
   if (cmd === 'secure') {
     await settled();
