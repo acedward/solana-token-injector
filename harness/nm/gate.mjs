@@ -639,13 +639,16 @@ async function gate(name, what, fn) {
   if (report.gates[name] !== 'PASS') throw new Error(`${name} FAILED`);
 }
 
-/** Polls the RPC until it shows `want` for the wallet (or the deadline); returns {ok, ms, got}. */
+/** Polls the RPC until it shows `want` for the wallet (or the deadline); returns {ok, ms, got}.
+ *  Every answer is also an A3 sample (run A, 2026-10-04: the first answer showing the filing was A2's). */
 async function rpcUntil(wallet, want, timeoutMs = 90_000) {
   const t0 = Date.now();
   let got = null;
   for (;;) {
     try {
+      const t = Date.now();
       got = await rpcAmounts(wallet);
+      samples.push({ t, wallet, amounts: got });
       if (same(got, want)) return { ok: true, ms: Date.now() - t0, got };
     } catch (e) {
       got = { error: e.message };
@@ -669,12 +672,13 @@ async function statusUntil(who, pred, timeoutMs) {
 let sampler = null;
 const samples = [];
 function startSampler() {
-  const wallets = { A: walletOf('A'), B: walletOf('B') };
+  const wallets = [walletOf('A'), walletOf('B')];
   sampler = setInterval(async () => {
-    const t = Date.now();
-    const s = { t };
-    for (const [w, a] of Object.entries(wallets)) s[w] = await rpcAmounts(a).catch(() => null);
-    samples.push(s);
+    for (const wallet of wallets) {
+      const t = Date.now();
+      const amounts = await rpcAmounts(wallet).catch(() => null);
+      if (amounts) samples.push({ t, wallet, amounts });
+    }
   }, 1000);
 }
 async function newestActionTime(account) {
@@ -684,9 +688,12 @@ async function newestActionTime(account) {
   const ts = Number(tx.block.timestamp);
   return { hash: tx.hash, height: tx.block.height, ms: ts < 1e11 ? ts * 1000 : ts };
 }
-function firstSeen(who, want, afterMs) {
-  const s = samples.find((x) => x.t >= afterMs && x[who] && same(x[who], want));
-  return s ? s.t : null;
+/** The earliest sample (sampler or A2 read) after `afterMs` in which `who`'s wallet shows `want`. */
+async function firstSeen(who, want, afterMs) {
+  const wallet = walletOf(who);
+  await sleep(3000); // let the sampler record the answers of the last moments
+  const hits = samples.filter((x) => x.wallet === wallet && x.t >= afterMs && same(x.amounts, want)).map((x) => x.t);
+  return hits.length ? Math.min(...hits) : null;
 }
 
 async function a2(cp, { minusChangeFor = null } = {}) {
@@ -779,7 +786,7 @@ async function e2e() {
   const takeTx = await newestActionTime(readState().B.account);
   const a3 = { take: { tx: takeTx } };
   for (const who of ['A', 'B']) {
-    const seen = firstSeen(who, expectedRpc(lastPage[who]), tTake);
+    const seen = await firstSeen(who, expectedRpc(lastPage[who]), tTake);
     a3.take[who] = { firstSeenMs: seen, latencyS: seen === null ? null : (seen - takeTx.ms) / 1000 };
   }
   report.a.A3 = { what: 'from the block of the take (C2) and of the change filing (C5) to the RPC showing it: <= 60 s', ...a3 };
@@ -807,7 +814,7 @@ async function e2e() {
   await checkpoint('c5', { verdicts: c5Verdicts });
   await a2('c5');
   const fileTx = await newestActionTime(readState().A.account);
-  const seenFile = firstSeen('A', expectedRpc(lastPage.A), tFile);
+  const seenFile = await firstSeen('A', expectedRpc(lastPage.A), tFile);
   report.a.A3.filing = { tx: fileTx, A: { firstSeenMs: seenFile, latencyS: seenFile === null ? null : (seenFile - fileTx.ms) / 1000 } };
   const lat = [report.a.A3.take.A.latencyS, report.a.A3.take.B.latencyS, report.a.A3.filing.A.latencyS];
   report.gates.A3 = lat.every((x) => x !== null && x <= 60) ? 'PASS' : 'FAIL';
