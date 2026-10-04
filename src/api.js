@@ -5,13 +5,15 @@
 //   POST   /api/registrations       {solanaAddress, viewingKey} -> 201 new / 200 exists / 400 invalid
 //   GET    /api/registrations/:id   one registration
 //   DELETE /api/registrations/:id   204 / 404
-//   GET    /health                  {ok, upstream, indexer, decryptor, registrations}
+//   GET    /health                  {ok, upstream, indexer, decryptor, registrations, accounts?}
+//   /api/accounts…                   Passport account registrations (AA 00059 I-4: src/accounts/api.js)
 // POST / stays JSON-RPC (handled by server.js). Request bodies are never logged.
 
 const fs = require('fs');
 const path = require('path');
 const { readBody, sendJson, CORS } = require('./server');
 const log = require('./log');
+const { createAccountRoutes } = require('./accounts/api');
 
 const PAGE_FILE = path.join(__dirname, 'web', 'index.html');
 const MAX_API_BODY = 16 * 1024;
@@ -70,6 +72,8 @@ function createApiRoutes({ config, registry, decryptor, upstream, accounts = nul
       ...(accounts ? { accounts: accounts.health() } : {}),
     };
   }
+
+  const accountRoutes = createAccountRoutes({ accounts });
 
   const notConfigured = (res) => sendJson(res, 503, { error: 'Midnight is not configured on this service (no "midnight" block in config.json)' });
 
@@ -142,6 +146,8 @@ function createApiRoutes({ config, registry, decryptor, upstream, accounts = nul
       sendJson(res, 405, { error: 'use GET or DELETE' }, { allow: 'GET, DELETE, OPTIONS' });
       return true;
     }
+
+    if (await accountRoutes(req, res, url)) return true;
 
     if (url.startsWith('/api/')) {
       sendJson(res, 404, { error: 'not found' });
