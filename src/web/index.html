@@ -188,6 +188,18 @@
     </table>
     <div class="foot"><span id="updated" aria-live="polite"></span><span>Refreshes every 3 s</span></div>
   </section>
+
+  <section class="card" aria-labelledby="acc-h">
+    <h2 id="acc-h">Passport accounts</h2>
+    <p class="sub">Night Market accounts registered by their wallet's signature ("Show in my wallet" on Night Market). Exact balances, shielded and unshielded. Registration happens on Night Market, not here.</p>
+    <table id="accounts">
+      <thead>
+        <tr><th>Solana address</th><th>Account</th><th>Key</th><th>Status</th><th>Tokens</th><th>Updated</th></tr>
+      </thead>
+      <tbody id="account-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+    </table>
+    <div class="foot"><span id="accounts-updated" aria-live="polite"></span><span>Refreshes every 3 s</span></div>
+  </section>
 </main>
 <script>
 (function () {
@@ -258,7 +270,50 @@
     });
   }
 
+  // AA 00059: Passport account registrations (masked: the account short, the key's 8-hex fingerprint).
+  var accountRows = document.getElementById('account-rows');
+  var accountsUpdated = document.getElementById('accounts-updated');
+  function short(hex) { return hex.slice(0, 8) + '…' + hex.slice(-6); }
+  function renderAccounts(list) {
+    accountRows.textContent = '';
+    if (!list.length) {
+      accountRows.appendChild(el('tr', null, [el('td', { colspan: '6', className: 'empty', text: 'No account registrations yet.' })]));
+      return;
+    }
+    list.forEach(function (r) {
+      var status = el('td', { 'data-label': 'Status' }, [el('span', { className: 'badge ' + r.status, text: r.status })]);
+      if (r.error) status.appendChild(el('div', { className: 'err', text: r.error }));
+      if (r.unseenCoins) status.appendChild(el('div', { className: 'muted', text: r.unseenCoins + ' coin(s) not filed in the inbox yet (a withdrawal\'s change): not counted' }));
+      var acct = el('td', { 'data-label': 'Account', className: 'mono', text: short(r.accountAddress) });
+      acct.title = r.accountAddress;
+      accountRows.appendChild(el('tr', { 'data-id': r.id }, [
+        el('td', { 'data-label': 'Solana address', className: 'mono', text: r.solanaAddress }),
+        acct,
+        el('td', { 'data-label': 'Key', className: 'mono', text: r.keyFingerprint + (r.heldKeys > 1 ? ' (+' + (r.heldKeys - 1) + ' older)' : '') }),
+        status,
+        el('td', { 'data-label': 'Tokens' }, [tokenList(r.tokens || [])]),
+        el('td', { 'data-label': 'Updated', text: fmtDate(r.updatedAt) })
+      ]));
+    });
+  }
+  function refreshAccounts() {
+    return fetch('/api/accounts', { cache: 'no-store' })
+      .then(function (res) { return res.json().then(function (body) { return { res: res, body: body }; }); })
+      .then(function (x) {
+        if (x.res.status === 503 && x.body && x.body.code === 'accounts-disabled') {
+          accountRows.textContent = '';
+          accountRows.appendChild(el('tr', null, [el('td', { colspan: '6', className: 'empty', text: 'Account registrations are not enabled on this service.' })]));
+          return;
+        }
+        if (!x.res.ok) throw new Error(x.body && x.body.error ? x.body.error : 'HTTP ' + x.res.status);
+        renderAccounts(x.body);
+        accountsUpdated.textContent = 'Updated ' + new Date().toLocaleTimeString();
+      })
+      .catch(function (err) { accountsUpdated.textContent = 'Could not load account registrations: ' + err.message; });
+  }
+
   function refresh() {
+    refreshAccounts();
     return fetch('/api/registrations', { cache: 'no-store' })
       .then(function (res) { return res.json().then(function (body) { return { res: res, body: body }; }); })
       .then(function (x) {
