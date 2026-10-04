@@ -1,0 +1,22 @@
+# gitleaks configuration (scripts/secret-scan.sh): the default rules, plus allowlists for PUBLIC
+# values the generic-api-key rule mistakes for secrets (AA 00059, 2026-10-04):
+#   - Passport account public keys in Night Market-built test states and vectors
+#     (test/fixtures/nm/vectors.json: "encKey" is an X25519 PUBLIC key, "deviceKey" an Ed25519 PUBLIC
+#     key, "pinnedKeySet" the published verifier-key-set fingerprint);
+#   - that fingerprint (21493588…, Night Market's pinned key set) wherever it is written;
+#   - the generated Night Market bundle, rebuilt and hash-checked by `npm run vendor:check`
+#     (its matches are verifier-key digests and the key-set fingerprint).
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "public keys and the key-set fingerprint"
+regexTarget = "match"
+regexes = [
+  '''(encKey|deviceKey|pinnedKeySet)": ?"[0-9a-f]{64}''',
+  '''21493588f30536e0f409dcf79deea54878f0c2cf6fee601a2359e54a776d5c5e''',
+]
+
+[[allowlists]]
+description = "the generated, reproducible Night Market bundle"
+paths = ['''(^|/)vendor/night-market/night-market-core\.mjs$''']
