@@ -71,6 +71,63 @@ function checkUrl(v, name, protocols) {
 }
 
 const MIDNIGHT_ENV = ['MIDNIGHT_NETWORK_ID', 'MIDNIGHT_INDEXER_HTTP', 'MIDNIGHT_INDEXER_WS', 'DECRYPTOR_BIN', 'TOKEN_REGISTRY'];
+// AA 00059: the I-4 network id rule (the registration text carries it).
+const ACCOUNT_NETWORK_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
+const HEX64 = /^[0-9a-f]{64}$/;
+
+function parseBool(v, name) {
+  if (v === true || v === false) return v;
+  const s = String(v).toLowerCase();
+  if (['1', 'true', 'on', 'yes'].includes(s)) return true;
+  if (['0', 'false', 'off', 'no'].includes(s)) return false;
+  throw new Error(`${name} must be true or false (got "${v}")`);
+}
+
+/** A pinned verifier-key set: {"circuits": {<circuit>: <64 hex>}} (or the bare map), as Night Market's
+ *  pinned-account-keys.ts holds it. */
+function loadKeySet(file) {
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    throw new Error(`cannot read the account key set ${file}: ${e.message}`);
+  }
+  const circuits = raw && typeof raw === 'object' && raw.circuits ? raw.circuits : raw;
+  if (!circuits || typeof circuits !== 'object' || Array.isArray(circuits) || Object.keys(circuits).length === 0) {
+    throw new Error(`the account key set ${file} must be {"circuits": {<circuit>: <64 hex>}}`);
+  }
+  const out = {};
+  for (const [c, d] of Object.entries(circuits)) {
+    if (typeof d !== 'string' || !HEX64.test(d.toLowerCase())) throw new Error(`the account key set ${file}: ${c} must be a 64-hex digest`);
+    out[c] = d.toLowerCase();
+  }
+  return out;
+}
+
+/** midnight.accounts (AA 00059 P2): the Passport account source. Enabled by default with "midnight". */
+function normalizeAccounts(rawA, { env, networkId, fromFile, fromEnv }) {
+  const a = rawA === undefined ? {} : rawA;
+  if (!a || typeof a !== 'object' || Array.isArray(a)) throw new Error('midnight.accounts must be an object');
+  const pick = (envName, key) => (env[envName] !== undefined && env[envName] !== '' ? env[envName] : a[key]);
+  const enabledRaw = pick('ACCOUNTS_ENABLED', 'enabled');
+  const enabled = enabledRaw === undefined ? true : parseBool(enabledRaw, 'midnight.accounts.enabled');
+  const num = (envName, key, def, min, max) => {
+    const raw = pick(envName, key);
+    const v = raw === undefined ? def : Number(raw);
+    if (!Number.isInteger(v) || v < min || v > max) throw new Error(`midnight.accounts.${key} must be an integer ${min}..${max}`);
+    return v;
+  };
+  const keySetFile = env.ACCOUNTS_KEY_SET_FILE ? fromEnv(env.ACCOUNTS_KEY_SET_FILE) : a.keySetFile ? fromFile(a.keySetFile) : null;
+  if (enabled && !ACCOUNT_NETWORK_RE.test(networkId)) throw new Error(`midnight.networkId "${networkId}" must match [a-z0-9][a-z0-9-]{0,31} for account registrations`);
+  return {
+    enabled,
+    pollMs: num('ACCOUNTS_POLL_MS', 'pollMs', 5000, 200, 3_600_000),
+    maxConcurrent: num('ACCOUNTS_MAX_CONCURRENT', 'maxConcurrent', 4, 1, 64),
+    maxTtlSeconds: num('ACCOUNTS_MAX_TTL_S', 'maxTtlSeconds', 600, 10, 86_400),
+    keySetFile,
+    keySet: keySetFile ? loadKeySet(keySetFile) : null,
+  };
+}
 
 function normalizeMidnight(rawM, { env, fromFile, fromEnv }) {
   const m = rawM || {};
@@ -114,6 +171,7 @@ function normalizeMidnight(rawM, { env, fromFile, fromEnv }) {
     decryptorTimeoutMs: num('decryptorTimeoutMs', 30000, 100),
     syncMinMs: num('syncMinMs', 10000, 0),
     syncQuietMs: num('syncQuietMs', 5000, 0),
+    accounts: normalizeAccounts(m.accounts, { env, networkId, fromFile, fromEnv }),
   };
 }
 

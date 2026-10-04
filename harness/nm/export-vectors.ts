@@ -135,6 +135,8 @@ const specs: Array<{ name: string; note: string; spec: AccountStateSpec }> = [
   { name: 'ok-inbox-k2', note: 'ok-inbox with enc key K2 (a rotation to a key the injector may hold)', spec: base({ inbox: sealed, encKey: encPub('K2') }) },
   { name: 'ok-inbox-k4', note: 'ok-inbox with enc key K4 (a rotation to a key nobody registers)', spec: base({ inbox: sealed, encKey: encPub('K4') }) },
   { name: 'ok-unshielded', note: 'ok + unshielded 00..00 = 5000000 and X = 7 (credited the same)', spec: base({ unshielded: [[ZERO, 5_000_000n], [COLOUR_X, 7n]], credited: [[ZERO, 5_000_000n], [COLOUR_X, 7n]] }) },
+  { name: 'ok-inbox-unshielded', note: 'ok-inbox + unshielded 00..00 = 5000000 and X = 7 (credited the same)', spec: base({ inbox: sealed, unshielded: [[ZERO, 5_000_000n], [COLOUR_X, 7n]], credited: [[ZERO, 5_000_000n], [COLOUR_X, 7n]] }) },
+  { name: 'ok-inbox-nonce4', note: 'ok-inbox after a same-key rotation ("Cancel all open offers"): auth nonce and counter 4, enc key K1', spec: base({ inbox: sealed, authNonce: 4n, useCounter: 4n }) },
   { name: 'scan-7-of-9', note: 'device entry at counter 7, auth nonce 9', spec: base({ authNonce: 9n, useCounter: 7n }) },
   { name: 'counter-300', note: 'device entry at counter 300, auth nonce 9 (beyond the 0..255 scan)', spec: base({ authNonce: 9n, useCounter: 300n }) },
   { name: 'vk-different', note: 'two circuits with each other\'s verifier keys', spec: base({ operations: swapped }) },

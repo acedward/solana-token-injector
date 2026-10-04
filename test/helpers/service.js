@@ -13,7 +13,8 @@ const ROOT = path.join(__dirname, '..', '..');
 
 // Config env overrides (master plan I-4) must not leak from the developer's shell into tests.
 const CONFIG_ENV = ['CONFIG', 'HOST', 'PORT', 'PUBLIC_URL', 'UPSTREAM', 'UPSTREAM_WS', 'DATA_DIR', 'MIDNIGHT_NETWORK_ID',
-  'MIDNIGHT_INDEXER_HTTP', 'MIDNIGHT_INDEXER_WS', 'DECRYPTOR_BIN', 'TOKEN_REGISTRY', 'LOG', 'CONFIG_WATCH'];
+  'MIDNIGHT_INDEXER_HTTP', 'MIDNIGHT_INDEXER_WS', 'DECRYPTOR_BIN', 'TOKEN_REGISTRY', 'LOG', 'CONFIG_WATCH',
+  'ACCOUNTS_ENABLED', 'ACCOUNTS_POLL_MS', 'ACCOUNTS_MAX_CONCURRENT', 'ACCOUNTS_MAX_TTL_S', 'ACCOUNTS_KEY_SET_FILE', 'JOURNEY_REGISTRY'];
 function cleanEnv(extra = {}) {
   const env = { ...process.env };
   for (const k of CONFIG_ENV) delete env[k];

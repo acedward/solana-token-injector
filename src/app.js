@@ -17,15 +17,20 @@ const { createWsProxy } = require('./ws-proxy');
 const { createServers } = require('./server');
 const { DecryptorClient } = require('./midnight/decryptor');
 const { RegistryService } = require('./registry/service');
+const { AccountService } = require('./accounts/service');
+const { loadNightMarket } = require('./accounts/bundle');
 const { createApiRoutes } = require('./api');
 
 // Keys a running process cannot change (a restart applies them).
 const RESTART_KEYS = ['upstream', 'upstreamWs', 'host', 'port', 'wsPort', 'publicUrl', 'dataDir'];
 const MIDNIGHT_RESTART_KEYS = ['networkId', 'indexerHttp', 'indexerWs', 'decryptorBin', 'reconnectMinMs', 'reconnectMaxMs', 'decryptorTimeoutMs', 'syncMinMs', 'syncQuietMs'];
 
+const accountsEnabled = (config) => !!(config.midnight && config.midnight.accounts && config.midnight.accounts.enabled);
+
 /**
- * createApp(config, { configPath?, watch?, reloadIntervalMs? })
- * With `watch` and a `configPath`, edits to the file are applied live.
+ * createApp(config, { configPath?, watch?, reloadIntervalMs?, nightMarket? })
+ * With `watch` and a `configPath`, edits to the file are applied live. With the account source
+ * enabled (midnight.accounts.enabled), `nightMarket` is the loaded vendored bundle (main loads it).
  */
 function createApp(config, opts = {}) {
   log.configure(config.log);
@@ -42,6 +47,7 @@ function createApp(config, opts = {}) {
   // Midnight: decryptor child process + registrations with their watchers.
   let decryptor = null;
   let registry = null;
+  let accounts = null;
   if (config.midnight) {
     decryptor = new DecryptorClient({ bin: config.midnight.decryptorBin, timeoutMs: config.midnight.decryptorTimeoutMs }).start();
     registry = new RegistryService({
@@ -59,13 +65,38 @@ function createApp(config, opts = {}) {
       throw err;
     }
     registrations = () => registry.tokenInputs();
+    // AA 00059: Passport accounts, a second balance source beside the viewing keys.
+    if (accountsEnabled(config)) {
+      if (!opts.nightMarket) {
+        decryptor.stop();
+        throw new Error('the account source needs the vendored Night Market bundle (createApp opts.nightMarket)');
+      }
+      accounts = new AccountService({
+        midnight: config.midnight,
+        publicUrl: config.publicUrl,
+        dataDir: config.dataDir,
+        nm: opts.nightMarket,
+        onChange: () => tokens.invalidate(),
+        onChangeNow: () => tokens.rebuildNow(),
+        getLookup: () => lookup,
+        getAllInputs: () => registrations(),
+      });
+      try {
+        accounts.start();
+      } catch (err) {
+        decryptor.stop();
+        registry.stop();
+        throw err;
+      }
+      registrations = () => [...registry.tokenInputs(), ...accounts.tokenInputs()];
+    }
     tokens.rebuildNow();
   }
 
   const upstream = createUpstream(config.upstream);
   const handleRpc = createRpcHandler({ plan: createPlanner(getState), upstream });
   const wsProxy = createWsProxy(config.upstreamWs);
-  const routes = createApiRoutes({ config, registry, decryptor, upstream });
+  const routes = createApiRoutes({ config, registry, decryptor, upstream, accounts });
   const { server, wsServer } = createServers({ handleRpc, getState, acceptUpgrade: wsProxy.acceptUpgrade, routes });
 
   function listen() {
@@ -93,6 +124,7 @@ function createApp(config, opts = {}) {
       const n = registry.store.list().length;
       console.log(`  Midnight   network ${config.midnight.networkId}, indexer ${config.midnight.indexerHttp}`);
       console.log(`             ${n} registration(s); token registry ${config.midnight.tokenRegistry || '(none: default names)'}`);
+      if (accounts) console.log(`             ${accounts.store.list().length} account registration(s) (Passport accounts, ${config.midnight.accounts.pollMs} ms poll)`);
       console.log(`  Web page   ${config.publicUrl}/\n`);
     }
     console.log(`\nPoint your wallet's custom RPC at http://${host}:${port}\n`);
@@ -130,6 +162,7 @@ function createApp(config, opts = {}) {
 
   async function close() {
     for (const stop of stopWatching) stop();
+    if (accounts) await accounts.stop();
     if (registry) await registry.stop();
     if (decryptor) await decryptor.stop();
     tokens.stop();
@@ -140,7 +173,7 @@ function createApp(config, opts = {}) {
     await Promise.all(closing);
   }
 
-  return { config, getState, tokens, registry, decryptor, upstream, applyReload, server, wsServer, listen, banner, close };
+  return { config, getState, tokens, registry, accounts, decryptor, upstream, applyReload, server, wsServer, listen, banner, close };
 }
 
 async function main(configArg) {
@@ -152,9 +185,18 @@ async function main(configArg) {
     console.error(`config error: ${e.message}`);
     process.exit(1);
   }
+  let nightMarket = null;
+  if (accountsEnabled(config)) {
+    try {
+      nightMarket = await loadNightMarket();
+    } catch (e) {
+      console.error(`startup error: ${e.message}`);
+      process.exit(1);
+    }
+  }
   let app;
   try {
-    app = createApp(config, { configPath, watch: process.env.CONFIG_WATCH !== '0' });
+    app = createApp(config, { configPath, watch: process.env.CONFIG_WATCH !== '0', nightMarket });
   } catch (e) {
     console.error(`startup error: ${e.message}`);
     process.exit(1);

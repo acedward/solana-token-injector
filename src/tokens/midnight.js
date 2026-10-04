@@ -2,21 +2,37 @@
 // Midnight tokens on the Solana side (FR-003, FR-107, Q6, Q11, Q12): one
 // Token-2022 mint per (network, token type); every registered Solana address
 // holds the sum of its registrations' totals for that type.
+//
+// AA 00059 (D6): a totals key is a shielded token type "<64 hex>" (viewing keys and Passport
+// accounts) or an unshielded one "u:<64 hex>" (Passport accounts' public balances). The two spaces
+// can hold equal bytes, so they get distinct ids: midnight:<net>:<hex> and midnight:<net>:u:<hex>.
 
 const { U64_MAX } = require('../amounts');
 
 const TYPE_RE = /^[0-9a-f]{64}$/;
 
-const midnightTokenId = (networkId, tokenType) => `midnight:${networkId}:${tokenType}`;
+const UNSHIELDED_PREFIX = 'u:';
+const isUnshieldedKey = (key) => key.startsWith(UNSHIELDED_PREFIX);
+const typeOfKey = (key) => (isUnshieldedKey(key) ? key.slice(UNSHIELDED_PREFIX.length) : key);
 
-/** Display metadata for a token type when the registry does not name it. */
-function defaultTokenInfo(tokenType) {
+/** The token id of a totals key ("<hex>" shielded, "u:<hex>" unshielded). */
+const midnightTokenId = (networkId, key) => `midnight:${networkId}:${key}`;
+
+/** Display metadata for a totals key when no registry names it. */
+function defaultTokenInfo(key) {
+  const type = typeOfKey(key);
+  if (isUnshieldedKey(key)) {
+    return { name: `Midnight unshielded ${type.slice(0, 8)}`, symbol: `MU${type.slice(0, 4).toUpperCase()}`, decimals: 6 };
+  }
   return {
-    name: `Midnight ${tokenType.slice(0, 8)}`,
-    symbol: `MN${tokenType.slice(0, 4).toUpperCase()}`,
+    name: `Midnight ${type.slice(0, 8)}`,
+    symbol: `MN${type.slice(0, 4).toUpperCase()}`,
     decimals: 6,
   };
 }
+
+/** The display info of a totals key: the defaults overlaid by `lookup(key)`. */
+const tokenInfoFor = (key, lookup = () => null) => ({ ...defaultTokenInfo(key), ...(lookup(key) || {}) });
 
 /**
  * Per-address totals: Map<solanaAddress, Map<tokenType, bigint>>, summed over
@@ -54,20 +70,23 @@ function midnightTokenSpecs({ networkId, registrations, lookup = () => null }) {
     }
   }
   const specs = [];
-  for (const type of [...byType.keys()].sort()) {
-    const info = { ...defaultTokenInfo(type), ...(lookup(type) || {}) };
+  for (const key of [...byType.keys()].sort()) {
+    const info = tokenInfoFor(key, lookup);
+    const type = typeOfKey(key);
+    const unshielded = isUnshieldedKey(key);
     specs.push({
-      id: midnightTokenId(networkId, type),
+      id: midnightTokenId(networkId, key),
       name: info.name,
       symbol: info.symbol,
       decimals: info.decimals,
       program: 'token-2022',
       uri: info.uri,
       image: info.image,
-      description: info.description || `Midnight shielded token ${type} (display only)`,
-      holders: byType.get(type),
+      description: info.description || `Midnight ${unshielded ? 'unshielded' : 'shielded'} token ${type} (display only)`,
+      holders: byType.get(key),
       source: 'midnight',
       tokenType: type,
+      privacy: unshielded ? 'unshielded' : 'shielded',
     });
   }
   return specs;
@@ -75,4 +94,4 @@ function midnightTokenSpecs({ networkId, registrations, lookup = () => null }) {
 
 const isClamped = (total) => total > U64_MAX;
 
-module.exports = { TYPE_RE, midnightTokenId, defaultTokenInfo, totalsByAddress, midnightTokenSpecs, isClamped };
+module.exports = { TYPE_RE, UNSHIELDED_PREFIX, isUnshieldedKey, typeOfKey, midnightTokenId, defaultTokenInfo, tokenInfoFor, totalsByAddress, midnightTokenSpecs, isClamped };

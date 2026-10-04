@@ -6,7 +6,10 @@
 //
 // {"network": "undeployed",
 //  "tokens": {"<64 hex type>": {"name": "...", "symbol": "...", "decimals": 6,
-//                               "image": "https://...", "description": "...", "uri": "https://..."}}}
+//                               "image": "https://...", "description": "...", "uri": "https://..."}},
+//  "unshielded": {"<64 hex type>": { same fields }}}          (optional; AA 00059 D6)
+// `tokens` names shielded token types, `unshielded` the unshielded ones (a Passport account's public
+// balances); lookup("u:<hex>") reads the second.
 
 const fs = require('fs');
 
@@ -15,13 +18,23 @@ const TYPE_RE = /^[0-9a-f]{64}$/;
 function parseTokenRegistry(raw, { networkId, source = 'token registry' } = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`${source}: must be a JSON object`);
   if (networkId && raw.network !== networkId) {
-    throw new Error(`${source}: "network" is "${raw.network}" but the service runs on Midnight network "${networkId}"`);
+    throw new Error(`${source}: "network" is "${raw.network}" but the service runs on Midnight network "${networkId}" (this file is the injector's token registry, {"network", "tokens": {<type>: {...}}}; a journey token registry goes in midnight.journeyRegistry)`);
   }
   if (!raw.tokens || typeof raw.tokens !== 'object' || Array.isArray(raw.tokens)) throw new Error(`${source}: "tokens" must be an object keyed by token type`);
+  const tokens = parseTokenMap(raw.tokens, `${source}: token`);
+  let unshielded = new Map();
+  if (raw.unshielded !== undefined) {
+    if (!raw.unshielded || typeof raw.unshielded !== 'object' || Array.isArray(raw.unshielded)) throw new Error(`${source}: "unshielded" must be an object keyed by token type`);
+    unshielded = parseTokenMap(raw.unshielded, `${source}: unshielded token`);
+  }
+  return { network: raw.network, tokens, unshielded };
+}
+
+function parseTokenMap(map, label) {
   const tokens = new Map();
-  for (const [key, t] of Object.entries(raw.tokens)) {
+  for (const [key, t] of Object.entries(map)) {
     const type = key.toLowerCase();
-    const where = `${source}: token ${key}`;
+    const where = `${label} ${key}`;
     if (!TYPE_RE.test(type)) throw new Error(`${where}: the key must be a 64-hex token type`);
     if (tokens.has(type)) throw new Error(`${where}: listed twice`);
     if (!t || typeof t !== 'object') throw new Error(`${where}: must be an object`);
@@ -46,7 +59,7 @@ function parseTokenRegistry(raw, { networkId, source = 'token registry' } = {}) 
     }
     tokens.set(type, info);
   }
-  return { network: raw.network, tokens };
+  return tokens;
 }
 
 function loadTokenRegistry(file, { networkId } = {}) {
@@ -65,9 +78,13 @@ function loadTokenRegistry(file, { networkId } = {}) {
   return parseTokenRegistry(raw, { networkId, source: `token registry ${file}` });
 }
 
-/** lookup(tokenType) -> info | null */
+/** lookup(key) -> info | null; key "<hex>" (shielded) or "u:<hex>" (unshielded). */
 function registryLookup(registry) {
-  return (type) => (registry && registry.tokens.get(type)) || null;
+  return (key) => {
+    if (!registry) return null;
+    if (key.startsWith('u:')) return (registry.unshielded && registry.unshielded.get(key.slice(2))) || null;
+    return registry.tokens.get(key) || null;
+  };
 }
 
 module.exports = { parseTokenRegistry, loadTokenRegistry, registryLookup };

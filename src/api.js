@@ -25,7 +25,7 @@ async function probe(fn) {
   }
 }
 
-function createApiRoutes({ config, registry, decryptor, upstream }) {
+function createApiRoutes({ config, registry, decryptor, upstream, accounts = null }) {
   const midnight = config.midnight;
 
   // The page is read once per process (no build step); placeholders filled per request.
@@ -66,6 +66,8 @@ function createApiRoutes({ config, registry, decryptor, upstream }) {
       indexer: midnight ? { ...i, networkId: midnight.networkId } : i,
       decryptor: d,
       registrations: regs,
+      // AA 00059: the Passport account registrations by status (absent when the source is off).
+      ...(accounts ? { accounts: accounts.health() } : {}),
     };
   }
 
