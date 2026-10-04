@@ -12,13 +12,16 @@
     "test:unit": "node --test \"test/unit/*.test.js\"",
     "test:integration": "node --test --test-concurrency=4 \"test/integration/*.test.js\"",
     "e2e": "node harness/cli.mjs e2e",
-    "harness:install": "npm --prefix harness ci --no-audit --no-fund"
+    "harness:install": "npm --prefix harness ci --no-audit --no-fund",
+    "vendor:check": "bash vendor/night-market/build.sh --check"
   },
   "engines": {
     "node": ">=22"
   },
   "license": "MIT",
   "dependencies": {
+    "@midnight-ntwrk/compact-runtime-0.20": "npm:@midnight-ntwrk/compact-runtime@0.20.0",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.3",
     "@solana/spl-token": "^0.4.15",
     "@solana/spl-token-metadata": "^0.1.6",
     "@solana/web3.js": "^1.99.0",
@@ -30,5 +33,8 @@
   },
   "devDependencies": {
     "@metaplex-foundation/mpl-token-metadata": "^2.13.0"
+  },
+  "overrides": {
+    "@midnightntwrk/onchain-runtime-v4": "4.0.0-rc.3"
   }
 }

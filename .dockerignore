@@ -5,6 +5,7 @@
 !proxy.js
 !src
 !tokens
+!vendor
 !decryptor
 decryptor/*
 !decryptor/Cargo.toml

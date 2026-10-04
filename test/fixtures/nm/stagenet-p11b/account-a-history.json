@@ -1,0 +1,176 @@
+{
+  "source": "https://indexer.stagenet.shielded.tools/api/v4/graphql (public, read-only), 2026-10-02 (AA 00047 P11.B)",
+  "note": "Market accounts A (maker) and B (taker) of the P6 stagenet acceptance; 4464f3f4 is the take that filled A's offer.",
+  "query": "contract(address) { actions(limit: 500) { __typename ... on ContractCall { entryPoint } transaction { hash id block { height } ... on RegularTransaction { zswapStartIndex zswapEndIndex transactionResult { status } } zswapLedgerEvents { id raw } } } } block { height }",
+  "account": "453b2b8d3fbf9900a562b5e29ebe517745e7b0a44c753c821d0e95503a763751",
+  "data": {
+    "block": {
+      "height": 712794
+    },
+    "contract": {
+      "actions": [
+        {
+          "__typename": "ContractCall",
+          "entryPoint": "withdraw_shielded_with_ed25519",
+          "transaction": {
+            "hash": "6ed69abc2887d49eee7aa1d596aa33c2d8b92f8e4d7fde02a312513cbe97ac88",
+            "id": 23010,
+            "zswapStartIndex": 5187,
+            "zswapEndIndex": 5188,
+            "transactionResult": {
+              "status": "SUCCESS"
+            },
+            "zswapLedgerEvents": [
+              {
+                "id": 51544,
+                "raw": "6d69646e696768743a6576656e745b7631345d3a080080453b2b8d3fbf9900a562b5e29ebe517745e7b0a44c753c821d0e95503a763751040019016ed69abc2887d49eee7aa1d596aa33c2d8b92f8e4d7fde02a312513cbe97ac880000000000aea3047d94bd83b666aae60683a4b6c3efb5cdc38e29eb06f58eebff9be1255200"
+              },
+              {
+                "id": 51545,
+                "raw": "6d69646e696768743a6576656e745b7631345d3a0400bd046ed69abc2887d49eee7aa1d596aa33c2d8b92f8e4d7fde02a312513cbe97ac8800000000017c1a99905182dafdfe87e5742fcd32855ba139bfa9c51f649b8481a8fb73efa600ad92b002dc86761d7e21415282eb6e9bc979a2292c0d632cabe719106b870441739042f0397fb5c045a07d843ddc5b29474507d604d2fae23d744cd49718f4512b73c96991b3f3b1be27e4bbe8369cd1af2d9e377ba7815524a1daaa742a788f5c417317631cad304ce84955a914cdd9c335ae78f89abe76a57a38927869325356ea0c731c6a0db606a61031c5087f40e66114b2fdb5a69d62a682af16825be44f17ab5473936def6e164ef332f6b464f8ae902dd316331e44d4bdd8de2906e4360fa6770673de9c517ca8c23d6e98f5a5db3942c994af89e20b23a963f3571b55ac2378dc71010d51"
+              }
+            ],
+            "block": {
+              "height": 685786
+            }
+          }
+        },
+        {
+          "__typename": "ContractCall",
+          "entryPoint": "open_swap_shielded_with_ed25519",
+          "transaction": {
+            "hash": "4464f3f4a8b35999350418c4741cc2c4aa4fce44913c8982e8bf137cb5b7620c",
+            "id": 23009,
+            "zswapStartIndex": 5183,
+            "zswapEndIndex": 5187,
+            "transactionResult": {
+              "status": "SUCCESS"
+            },
+            "zswapLedgerEvents": [
+              {
+                "id": 51537,
+                "raw": "6d69646e696768743a6576656e745b7631345d3a080080453b2b8d3fbf9900a562b5e29ebe517745e7b0a44c753c821d0e95503a763751040019014464f3f4a8b35999350418c4741cc2c4aa4fce44913c8982e8bf137cb5b7620c00000000005af4437dfd239d35581358cc9aa1b91f83b4d00e075da643fde4d7e747eec2a200"
+              },
+              {
+                "id": 51538,
+                "raw": "6d69646e696768743a6576656e745b7631345d3a08008057351491d79469efb1f170ae2a792c94a0cf41038f0c3d41a0572ff549c0412e040019014464f3f4a8b35999350418c4741cc2c4aa4fce44913c8982e8bf137cb5b7620c0000000000db9640fdfc37ab2af41060a1caacf6742861b849394277ed0cb4db3829df66f800"
+              },
+              {
+                "id": 51539,
+                "raw": "6d69646e696768743a6576656e745b7631345d3a08008057351491d79469efb1f170ae2a792c94a0cf41038f0c3d41a0572ff549c0412e040025014464f3f4a8b35999350418c4741cc2c4aa4fce44913c8982e8bf137cb5b7620c00000000010a54cabb45558285f4bdeb733384c69e1584f7638a9fa3d1a84282c8e162f5750200fd50"
+              },
+              {
+                "id": 51540,
+                "raw": "6d69646e696768743a6576656e745b7631345d3a080080453b2b8d3fbf9900a562b5e29ebe517745e7b0a44c753c821d0e95503a763751040025014464f3f4a8b35999350418c4741cc2c4aa4fce44913c8982e8bf137cb5b7620c00000000014ea95a9ecbbc6cf61309939a7ab56599ec3d4a8b410637cacf282a51caebf49b02000151"
+              },
+              {
+                "id": 51541,
+                "raw": "6d69646e696768743a6576656e745b7631345d3a08008057351491d79469efb1f170ae2a792c94a0cf41038f0c3d41a0572ff549c0412e040025014464f3f4a8b35999350418c4741cc2c4aa4fce44913c8982e8bf137cb5b7620c00000000017c49402d55b0cf7020c6c7d2de594d193974a66ea5d67241776460030f12795a02000551"
+              },
+              {
+                "id": 51542,
+                "raw": "6d69646e696768743a6576656e745b7631345d3a080080453b2b8d3fbf9900a562b5e29ebe517745e7b0a44c753c821d0e95503a763751040025014464f3f4a8b35999350418c4741cc2c4aa4fce44913c8982e8bf137cb5b7620c0000000001edc20df6f937d9d57b2c0ab6b922b579a82b7c06af3b1eb31a5990bc5b548e3702000951"
+              }
+            ],
+            "block": {
+              "height": 685773
+            }
+          }
+        },
+        {
+          "__typename": "ContractCall",
+          "entryPoint": "deposit_shielded",
+          "transaction": {
+            "hash": "9f64780f56975ddae5b699dc6fd590afb899b852af4de1001a82b08dff6622b0",
+            "id": 23002,
+            "zswapStartIndex": 5180,
+            "zswapEndIndex": 5181,
+            "transactionResult": {
+              "status": "SUCCESS"
+            },
+            "zswapLedgerEvents": [
+              {
+                "id": 51526,
+                "raw": "6d69646e696768743a6576656e745b7631345d3a080080453b2b8d3fbf9900a562b5e29ebe517745e7b0a44c753c821d0e95503a763751040025019f64780f56975ddae5b699dc6fd590afb899b852af4de1001a82b08dff6622b00000000001bddb1aa5155d4955c57d32d24da07818158d01f85421b63731d017dc9622e2710200f150"
+              }
+            ],
+            "block": {
+              "height": 685612
+            }
+          }
+        },
+        {
+          "__typename": "ContractCall",
+          "entryPoint": "deposit_shielded",
+          "transaction": {
+            "hash": "4002fc3ef94cfdc68ad2d981b099559b68bf1945913cad83f17dd351e02baa15",
+            "id": 23001,
+            "zswapStartIndex": 5179,
+            "zswapEndIndex": 5180,
+            "transactionResult": {
+              "status": "SUCCESS"
+            },
+            "block": {
+              "height": 685608
+            },
+            "zswapLedgerEvents": [
+              {
+                "id": 51524,
+                "raw": "6d69646e696768743a6576656e745b7631345d3a080080453b2b8d3fbf9900a562b5e29ebe517745e7b0a44c753c821d0e95503a763751040025014002fc3ef94cfdc68ad2d981b099559b68bf1945913cad83f17dd351e02baa1500000000016e1a5a599d32f896b68b5cf31f10a4595380c8c5cd78cea1b50d13de80086f6b0200ed50"
+              }
+            ]
+          }
+        },
+        {
+          "__typename": "ContractCall",
+          "entryPoint": "activate_initial_device_with_ed25519",
+          "transaction": {
+            "hash": "6b642dd6e23f92bd6de858d86e86df653b3f7b0ee83cc5db1d50329efc381228",
+            "id": 23000,
+            "zswapStartIndex": 5179,
+            "zswapEndIndex": 5179,
+            "transactionResult": {
+              "status": "SUCCESS"
+            },
+            "block": {
+              "height": 685604
+            },
+            "zswapLedgerEvents": []
+          }
+        },
+        {
+          "__typename": "ContractUpdate",
+          "transaction": {
+            "hash": "860608cd326bc408c37bef02a917f89b4cee5508662142c6b5da9e83cf8b32e0",
+            "id": 22999,
+            "zswapStartIndex": 5179,
+            "zswapEndIndex": 5179,
+            "transactionResult": {
+              "status": "SUCCESS"
+            },
+            "zswapLedgerEvents": [],
+            "block": {
+              "height": 685600
+            }
+          }
+        },
+        {
+          "__typename": "ContractDeploy",
+          "transaction": {
+            "hash": "78599c894d657816fcfdb1e42f9bbfae6885dbb8e13e51f6e6d08e6b694ae812",
+            "id": 22998,
+            "zswapStartIndex": 5179,
+            "zswapEndIndex": 5179,
+            "transactionResult": {
+              "status": "SUCCESS"
+            },
+            "zswapLedgerEvents": [],
+            "block": {
+              "height": 685597
+            }
+          }
+        }
+      ]
+    }
+  }
+}
