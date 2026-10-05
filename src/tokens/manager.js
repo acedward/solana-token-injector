@@ -8,7 +8,7 @@
 const log = require('../log');
 const { buildTokenState } = require('./state');
 
-function createTokenManager({ publicUrl, staticSpecs = [], midnightSpecs = () => [], debounceMs = 100 }) {
+function createTokenManager({ publicUrl, staticSpecs = [], midnightSpecs = () => [], fillIns = () => [], debounceMs = 100 }) {
   let statics = staticSpecs;
   let state = build();
   let timer = null;
@@ -19,6 +19,7 @@ function createTokenManager({ publicUrl, staticSpecs = [], midnightSpecs = () =>
     const specs = [...statics, ...midnightSpecs()];
     return buildTokenState(specs, {
       publicUrl,
+      fillIns: fillIns(),
       onError: (spec, err) => log.warn(`token "${spec.id}" skipped: ${err.message}`),
     });
   }

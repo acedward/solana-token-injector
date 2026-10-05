@@ -132,3 +132,22 @@ test('manager: static and Midnight tokens side by side', () => {
   assert.equal(s.byOwner.get(a).length, 2);
   m.stop();
 });
+
+test('P7.1 fill-ins: a Metaplex account apart from the synthetic accounts, name/symbol cut to the Metaplex limits, JSON with the image', () => {
+  const { buildTokenState } = require('../../src/tokens/state');
+  const { metaplexPda, MPL_TOKEN_METADATA } = require('../../src/tokens/accounts');
+  const { PublicKey, Keypair } = require('@solana/web3.js');
+  const { Metadata } = require('@metaplex-foundation/mpl-token-metadata');
+  const mint = Keypair.generate().publicKey.toBase58();
+  const s = buildTokenState([], { publicUrl: 'http://127.0.0.1:1', fillIns: [{ mint, name: 'A very long token name that exceeds thirty-two bytes', symbol: 'SYMBOL12345', image: 'https://i/x.png' }] });
+  const pda = metaplexPda(new PublicKey(mint)).toBase58();
+  assert.equal(s.accounts.size, 0, 'no synthetic account for a real mint');
+  assert.equal(s.mints.size, 0);
+  const acct = s.fillIns.get(pda);
+  assert.equal(acct.owner, MPL_TOKEN_METADATA.toBase58());
+  const [meta] = Metadata.deserialize(acct.data);
+  assert.equal(Buffer.byteLength(meta.data.name.replace(/\0+$/, '')), 32);
+  assert.equal(meta.data.symbol.replace(/\0+$/, ''), 'SYMBOL1234');
+  assert.equal(s.metadataJson.get(`spl:${mint}`).image, 'https://i/x.png');
+  assert.equal(meta.data.uri.replace(/\0+$/, ''), `http://127.0.0.1:1/token-metadata/${encodeURIComponent(`spl:${mint}`)}.json`);
+});

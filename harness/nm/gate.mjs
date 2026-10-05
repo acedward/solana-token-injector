@@ -544,6 +544,8 @@ const { deriveKey } = require('../../src/tokens/accounts.js');
 const { midnightTokenId } = require('../../src/tokens/midnight.js');
 const { PublicKey, Keypair, Connection, LAMPORTS_PER_SOL } = require('@solana/web3.js');
 const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+const ICONS = 'https://midnight-solana-token-icons.ac-edward.workers.dev';
+const { metaplexPda } = require('../../src/tokens/accounts.js');
 const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 const injUrl = () => `http://127.0.0.1:${ports.injector}`;
 const valUrl = () => `http://127.0.0.1:${ports.solanaRpc}`;
@@ -746,7 +748,7 @@ async function e2e() {
   const journey = {
     midnightNetwork: 'undeployed',
     solanaGenesisHash: genesis,
-    tokens: [{ colour: usdc.midnightColour, splMint: mintX, bridgeContract: usdc.contract, bridgeProgram: TOKEN_PROGRAM, bridgeApi: 'http://127.0.0.1:1', name: 'Test X', symbol: 'X', decimals: 6 }],
+    tokens: [{ colour: usdc.midnightColour, splMint: mintX, bridgeContract: usdc.contract, bridgeProgram: TOKEN_PROGRAM, bridgeApi: 'http://127.0.0.1:1', name: 'X', symbol: 'X', decimals: 6, image: `${ICONS}/x-midnight.png`, splImage: `${ICONS}/x.png` }],
   };
   writeFileSync(path.join(runDir, 'journey-tokens.undeployed.json'), JSON.stringify(journey, null, 1));
   writeFileSync(path.join(OUT, 'journey-tokens.undeployed.json'), JSON.stringify(journey, null, 1));
@@ -862,7 +864,7 @@ async function e2e() {
   });
 
   // A7: names through the spl-token CLI pointed at the injector.
-  await gate('A7', 'spl-token: the real X (100) and "Test X (Midnight)" with A\'s twUSDC amount; display shows the I-4b metadata; the real X account bytes are the validator\'s', async (g) => {
+  await gate('A7', 'spl-token: the real X (100) and "X (Midnight)" with A\'s twUSDC amount; display shows the I-4b metadata; the real X account bytes are the validator\'s', async (g) => {
     const cliDir = path.join(runDir, 'spl-inj');
     mkdirSync(cliDir, { mode: 0o700 });
     writeFileSync(path.join(cliDir, 'cli.yml'), `json_rpc_url: "${injUrl()}"\nwebsocket_url: "ws://127.0.0.1:${ports.injector + 1}"\nkeypair_path: ${path.join(splDir, 'payer.json')}\ncommitment: confirmed\n`);
@@ -892,7 +894,31 @@ async function e2e() {
       g.lastMasked = maskSlot(a) === maskSlot(b);
     }
     g.realXBytesEqual = bytesEqual;
-    return g.listX?.amount === '100000000' && g.listSynth?.amount === pageUsdc && g.display.name === 'Test X (Midnight)' && g.display.symbol === 'mnX' && Number(g.display.decimals) === 6 && bytesEqual;
+    return g.listX?.amount === '100000000' && g.listSynth?.amount === pageUsdc && g.display.name === 'X (Midnight)' && g.display.symbol === 'mnX' && Number(g.display.decimals) === 6 && bytesEqual;
+  });
+
+  // A13 (P7, owner 00057 Q10): the real X has no Metaplex metadata on the validator; the RPC fills it in
+  // (name "X", its icon), never the mint itself; "X (Midnight)" carries its own icon.
+  await gate('A13', 'display: the real X\'s missing Metaplex metadata is filled in (name X, icon x.png) while the validator has none and the mint bytes are the validator\'s; "X (Midnight)" has the icon x-midnight.png', async (g) => {
+    const { Metadata } = require('@metaplex-foundation/mpl-token-metadata');
+    const pdaX = metaplexPda(new PublicKey(mintX)).toBase58();
+    const upstreamPda = JSON.parse(await rpcRaw(valUrl(), 'getAccountInfo', [pdaX, { encoding: 'base64' }])).result.value;
+    const filled = JSON.parse(await rpcRaw(injUrl(), 'getAccountInfo', [pdaX, { encoding: 'base64' }])).result.value;
+    g.validatorHasMetadata = upstreamPda !== null;
+    let meta = null;
+    if (filled) [meta] = Metadata.deserialize(Buffer.from(filled.data[0], 'base64'));
+    g.filled = meta ? { name: meta.data.name.replace(/\0+$/, ''), symbol: meta.data.symbol.replace(/\0+$/, ''), uri: meta.data.uri.replace(/\0+$/, '') } : null;
+    g.filledJson = g.filled ? await (await fetch(g.filled.uri)).json() : null;
+    const synthJson = await (await fetch(`${injUrl()}/token-metadata/${encodeURIComponent(midnightTokenId('undeployed', usdc.midnightColour))}.json`)).json();
+    g.synthetic = { name: synthJson.name, symbol: synthJson.symbol, image: synthJson.image };
+    let mintBytesEqual = false;
+    for (let i = 0; i < 10 && !mintBytesEqual; i++) {
+      const [a, b] = await Promise.all([rpcRaw(injUrl(), 'getAccountInfo', [mintX, { encoding: 'base64' }]), rpcRaw(valUrl(), 'getAccountInfo', [mintX, { encoding: 'base64' }])]);
+      mintBytesEqual = a === b;
+    }
+    g.mintBytesEqual = mintBytesEqual;
+    return !g.validatorHasMetadata && g.filled?.name === 'X' && g.filled?.symbol === 'X' && g.filledJson?.image === `${ICONS}/x.png` &&
+      g.synthetic.name === 'X (Midnight)' && g.synthetic.symbol === 'mnX' && g.synthetic.image === `${ICONS}/x-midnight.png` && mintBytesEqual;
   });
 
   // A8: an unregistered address: byte-identical answers.
@@ -1035,7 +1061,7 @@ try {
 } finally {
   await teardown(failed ? 'failure' : 'done');
 }
-const need = E2E ? ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A10-files', 'A12'] : ['GB1', 'GB2', 'GB3', 'GB4', 'GB5', 'GB6', 'GB-X', 'GB-T'];
+const need = E2E ? ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A10-files', 'A12', 'A13'] : ['GB1', 'GB2', 'GB3', 'GB4', 'GB5', 'GB6', 'GB-X', 'GB-T'];
 const allPass = !failed && need.every((g) => report.gates[g] === 'PASS');
 report.verdict = allPass ? 'PASS' : 'FAIL';
 saveReport();

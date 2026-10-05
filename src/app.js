@@ -8,7 +8,7 @@ const { loadConfig } = require('./config');
 const { createTokenManager } = require('./tokens/manager');
 const { midnightTokenSpecs } = require('./tokens/midnight');
 const { registryLookup } = require('./tokens/registry');
-const { loadJourneyRegistry, checkJourneyRegistry, journeyLookup, combineLookups } = require('./tokens/journey-registry');
+const { loadJourneyRegistry, checkJourneyRegistry, journeyLookup, combineLookups, journeyFillIns } = require('./tokens/journey-registry');
 const { watchConfig } = require('./config-watch');
 const { uiAmountString } = require('./amounts');
 const { createPlanner } = require('./rpc/planners');
@@ -45,7 +45,8 @@ function createApp(config, opts = {}) {
   let registrations = () => [];
   const midnightSpecs = () =>
     config.midnight ? midnightTokenSpecs({ networkId: config.midnight.networkId, registrations: registrations(), lookup }) : [];
-  const tokens = createTokenManager({ publicUrl: config.publicUrl, staticSpecs: config.tokens, midnightSpecs });
+  // AA 00059 P7.1: metadata fill-ins for the journey registry's real SPL mints (served only when the upstream has none).
+  const tokens = createTokenManager({ publicUrl: config.publicUrl, staticSpecs: config.tokens, midnightSpecs, fillIns: () => journeyFillIns(journey) });
   const getState = tokens.getState;
   const stopWatching = [];
 
