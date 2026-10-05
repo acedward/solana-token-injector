@@ -1,0 +1,52 @@
+# The injector inside Night Market's localnet (AA 00059 P5.2): an override of Night Market's own
+# compose project (its test/stack/p6/compose.yml, read only), used as
+#   docker compose -f $NM_DIR/test/stack/p6/compose.yml -f harness/nm/compose.injector.yml -p aa00059-nm-… \
+#     --profile injector up -d injector
+# by harness/nm/gate.mjs --mode e2e (npm run e2e:accounts), which builds the image from this repo with
+# `docker build --pull=false` (nothing is pulled) and removes the tag at the end.
+#
+# The injector reads the indexer inside the compose network (`indexer:8088`) and the native
+# solana-test-validator on the host through host.docker.internal. Published on 127.0.0.1 only: the RPC,
+# page and API on INJECTOR_PORT, the Solana websockets on INJECTOR_WS_PORT (= INJECTOR_PORT + 1).
+# The journey token registry (00057 I-1) is mounted read-only from the run directory.
+#
+# For 00057's journey stack: the same service block, with UPSTREAM pointing at its validator and
+# JOURNEY_REGISTRY at its generated journey-tokens.<net>.json.
+
+services:
+  injector:
+    image: ${INJECTOR_IMAGE:-s00059/service:unset}
+    pull_policy: never
+    profiles: [injector]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: ${INJECTOR_MEM_LIMIT:-1g}
+    depends_on:
+      indexer:
+        condition: service_started
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '127.0.0.1:${INJECTOR_PORT:?}:8899'
+      - '127.0.0.1:${INJECTOR_WS_PORT:?}:8900'
+    volumes:
+      - injector-data:/data
+      - '${JOURNEY_FILE:?}:/run/journey/journey-tokens.undeployed.json:ro'
+    environment:
+      HOST: '0.0.0.0'
+      PORT: '8899'
+      PUBLIC_URL: 'http://127.0.0.1:${INJECTOR_PORT:?}'
+      UPSTREAM: 'http://host.docker.internal:${VALIDATOR_RPC_PORT:?}'
+      UPSTREAM_WS: 'ws://host.docker.internal:${VALIDATOR_WS_PORT:?}'
+      DATA_DIR: '/data'
+      MIDNIGHT_NETWORK_ID: 'undeployed'
+      MIDNIGHT_INDEXER_HTTP: 'http://indexer:8088/api/v4/graphql'
+      MIDNIGHT_INDEXER_WS: 'ws://indexer:8088/api/v4/graphql/ws'
+      DECRYPTOR_BIN: '/usr/local/bin/midnight-esk-decrypt'
+      JOURNEY_REGISTRY: '/run/journey/journey-tokens.undeployed.json'
+      ACCOUNTS_ENABLED: '1'
+      ACCOUNTS_POLL_MS: '${ACCOUNTS_POLL_MS:-5000}'
+      LOG: 'true'
+
+volumes:
+  injector-data:

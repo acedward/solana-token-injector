@@ -149,7 +149,7 @@ export function writeEnv(ports, { serviceImage } = {}) {
 /** Fail early (before starting anything) if a required image or binary is missing. */
 export const REQUIRED_IMAGES = [
   'midnightntwrk/midnight-node@sha256:caf93d6f9fb3630c906ef3e714c151655377f3d28f907d17545de1870514da2e',
-  'midnightntwrk/indexer-standalone@sha256:5d79f3a20da9ed86236c7f7dc9d93b1beeb0b0c47c9c43a791041322eb80b74e',
+  process.env.INDEXER_IMAGE || 'midnightntwrk/indexer-standalone@sha256:5d79f3a20da9ed86236c7f7dc9d93b1beeb0b0c47c9c43a791041322eb80b74e',
   'midnightntwrk/proof-server:9.0.0-rc.6',
 ];
 

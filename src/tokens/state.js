@@ -28,6 +28,9 @@ function emptyState() {
     tokenAccounts: new Map(), // token account pubkey -> { mint, amount, decimals }
     metadataJson: new Map(), // id -> JSON served at /token-metadata/<id>.json
     ids: new Map(), // token id -> mint pubkey
+    // AA 00059 P7.1: Metaplex metadata accounts for REAL SPL mints of the journey token registry,
+    // served only when the upstream has none (pda -> account; src/rpc/planners.js `onlyIfNull`).
+    fillIns: new Map(),
   };
 }
 
@@ -154,11 +157,50 @@ function addToken(state, t, { publicUrl }) {
   });
 }
 
+/** `s` cut to at most `max` UTF-8 bytes, never inside a character. */
+function cutUtf8(s, max) {
+  let out = '';
+  let n = 0;
+  for (const ch of String(s)) {
+    const b = Buffer.byteLength(ch);
+    if (n + b > max) break;
+    out += ch;
+    n += b;
+  }
+  return out;
+}
+
 /**
- * Builds a TokenState from specs. A spec that fails to encode is skipped and
- * reported through `onError(spec, err)` (default: throw).
+ * AA 00059 P7.1 (owner, 00057 Q10): a Metaplex metadata account for a REAL SPL mint the journey token
+ * registry lists, for wallets that would otherwise show only its address. It lives apart from the
+ * synthetic accounts: the planner serves it only when the upstream answers that the account does not
+ * exist, so real metadata always wins, and the mint, its token accounts and balances are never touched.
+ * fill: { mint (base58), name, symbol, image? }.
  */
-function buildTokenState(specs, { publicUrl, onError } = {}) {
+function addFillIn(state, f, { publicUrl }) {
+  const mint = new PublicKey(f.mint);
+  const id = `spl:${mint.toBase58()}`;
+  const name = cutUtf8(f.name, 32);
+  const symbol = cutUtf8(f.symbol, 10);
+  const authority = deriveKey(`authority:${id}`);
+  const uri = metadataUri(publicUrl, id);
+  const pda = metaplexPda(mint).toBase58();
+  if (state.accounts.has(pda)) throw new Error(`the metadata account of ${mint.toBase58()} is already a synthetic token's`);
+  const data = encodeMetaplexMetadata({ authority, mint, name, symbol, uri });
+  state.fillIns.set(pda, { owner: MPL_TOKEN_METADATA.toBase58(), data, parsed: null });
+  state.metadataJson.set(id, {
+    name,
+    symbol,
+    description: `${name} (SPL mint ${mint.toBase58()}). This mint has no on-chain metadata; the name and the icon come from the journey token registry, served by this RPC (display only).`,
+    image: f.image || '',
+  });
+}
+
+/**
+ * Builds a TokenState from specs (and the metadata fill-ins). A spec that fails to encode is skipped
+ * and reported through `onError(spec, err)` (default: throw).
+ */
+function buildTokenState(specs, { publicUrl, onError, fillIns = [] } = {}) {
   const state = emptyState();
   for (const t of specs) {
     try {
@@ -167,6 +209,14 @@ function buildTokenState(specs, { publicUrl, onError } = {}) {
     } catch (err) {
       if (!onError) throw err;
       onError(t, err);
+    }
+  }
+  for (const f of fillIns) {
+    try {
+      addFillIn(state, f, { publicUrl });
+    } catch (err) {
+      if (!onError) throw err;
+      onError({ id: `spl:${f.mint}` }, err);
     }
   }
   return state;

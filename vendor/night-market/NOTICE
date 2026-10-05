@@ -1,0 +1,13 @@
+solana-token-injector: vendored Night Market slice (vendor/night-market/night-market-core.mjs)
+
+This bundle is built from, and contains code of:
+
+- Night Market (acedward/solana-night-market), Apache License 2.0 (LICENSE in this directory),
+  commit 10b29b1170f014951f03a1d9613b9b3da4328489: packages/core/src and web/src/chain.
+- Passport (acedward/passport), Apache License 2.0 (the same text as LICENSE in this directory),
+  commit 599327b918b55afc95d6c98a89bcd15f4e8b0d53: contract/src/wallet, and the account contract
+  module generated from contract/contracts/account.compact by compactc 0.35.0.
+- Third-party packages bundled in: zod 4.6.5 (MIT), @noble/curves 2.2.0 (MIT),
+  @noble/hashes 2.2.0 (MIT), tweetnacl 1.0.3 (Unlicense / public domain).
+
+The code is unchanged; see PROVENANCE.md for the exact sources, the build command and the hashes.

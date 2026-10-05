@@ -96,6 +96,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json proxy.js ./
 COPY src ./src
 COPY tokens ./tokens
+# The vendored Night Market slice (AA 00059 D1): an ESM bundle the CommonJS service loads with import().
+COPY vendor ./vendor
 
 RUN printf '{}\n' > /app/config.json \
  && mkdir -p /data \

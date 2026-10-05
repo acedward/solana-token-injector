@@ -6,6 +6,10 @@
 //        transactions from `index`, then a progress event, then live events.
 // Like the real indexer, a new `connect` for a key replaces its session id.
 // Controls: addTransaction, setProgress, dropSockets, setDown, rejectSessions.
+//
+// AA 00059: also the account queries Night Market's page reads (web/src/chain/indexer.ts STATE_QUERY,
+// web/src/chain/history.ts tip / page / deploy queries) and the `contractActions(address, offset)`
+// subscription. Controls: setContract, addAction, setTip, failStreams.
 
 const http = require('http');
 const crypto = require('crypto');
@@ -25,6 +29,11 @@ async function startMockIndexer({ port, progressEveryMs = 0 } = {}) {
   let rejectSessions = false;
   const rejectedKeys = new Set(); // subscriptions for these keys fail
   let txSeq = 0;
+  // AA 00059: contracts by address -> { state, actions (oldest first), deployHeight }; the chain tip.
+  const contracts = new Map();
+  let tip = 1;
+  let streamsFail = false;
+  const low = (h) => String(h || '').replace(/^0x/, '').toLowerCase();
 
   const keyState = (k) => {
     if (!keys.has(k)) keys.set(k, { txs: [], sessionId: null });
@@ -67,6 +76,22 @@ async function startMockIndexer({ port, progressEveryMs = 0 } = {}) {
         sessions.delete(q.variables && q.variables.sessionId);
         return reply(200, { data: { disconnect: null } });
       }
+      // AA 00059: the account reads.
+      const v = q.variables || {};
+      if (/query AccountState\(/.test(q.query)) {
+        const c = contracts.get(low(v.address));
+        return reply(200, { data: { contract: c ? { state: c.state } : null, block: { height: tip } } });
+      }
+      if (/query AccountHistoryTip/.test(q.query)) return reply(200, { data: { block: { height: tip } } });
+      if (/query AccountHistory\(/.test(q.query)) {
+        const c = contracts.get(low(v.address));
+        const limit = Math.min(v.limit || 500, 500);
+        return reply(200, { data: { contract: c ? { actions: [...c.actions].reverse().slice(0, limit) } : null } });
+      }
+      if (/query AccountHistoryStart\(/.test(q.query)) {
+        const c = contracts.get(low(v.address));
+        return reply(200, { data: { contract: c ? { actions: [{ transaction: { block: { height: c.deployHeight } } }] } : null } });
+      }
       if (/__typename/.test(q.query)) return reply(200, { data: { __typename: 'Query' } });
       return reply(200, { errors: [{ message: 'unsupported query in mock' }] });
     });
@@ -102,6 +127,18 @@ async function startMockIndexer({ port, progressEveryMs = 0 } = {}) {
       if (m.type === 'complete') {
         for (const s of subs) if (s.ws === ws && s.id === m.id) subs.delete(s);
         return undefined;
+      }
+      if (m.type === 'subscribe' && /contractActions\(address: \$address, offset: \$offset\)/.test(m.payload.query)) {
+        if (!acked) return ws.close(4401, 'Unauthorized');
+        calls.contractStreams = (calls.contractStreams || 0) + 1;
+        if (streamsFail) return send(ws, { id: m.id, type: 'error', payload: [{ message: 'stream unavailable (mock)' }] });
+        const { address, offset } = m.payload.variables || {};
+        const c = contracts.get(low(address));
+        const from = (offset && offset.height) || 0;
+        for (const a of c ? c.actions : []) {
+          if (a.transaction.block.height >= from) send(ws, { id: m.id, type: 'next', payload: { data: { contractActions: a } } });
+        }
+        return undefined; // then waits for new actions, like the real stream
       }
       if (m.type === 'subscribe') {
         if (!acked) return ws.close(4401, 'Unauthorized');
@@ -166,6 +203,27 @@ async function startMockIndexer({ port, progressEveryMs = 0 } = {}) {
     /** Re-sends an already delivered transaction (duplicate delivery). */
     redeliver(viewingKey, ev) {
       for (const s of subs) if (s.key === viewingKey) next(s, ev);
+    },
+    /** AA 00059: a contract the account queries answer for: {state (hex), actions (oldest first), deployHeight?}. */
+    setContract(address, { state, actions = [], deployHeight = 1 }) {
+      contracts.set(low(address), { state, actions: [...actions], deployHeight });
+      for (const a of actions) tip = Math.max(tip, a.transaction.block.height);
+    },
+    /** Replaces a contract's state (e.g. a key rotation), keeping its actions. */
+    setState(address, state) {
+      contracts.get(low(address)).state = state;
+    },
+    /** Appends an action (and moves the tip to its block). */
+    addAction(address, action) {
+      contracts.get(low(address)).actions.push(action);
+      tip = Math.max(tip, action.transaction.block.height);
+    },
+    setTip(h) {
+      tip = h;
+    },
+    /** The `contractActions` subscription answers with an error. */
+    failStreams(v = true) {
+      streamsFail = v;
     },
     /** Sets the progress numbers (missing fields allowed) and pushes them to every subscription. */
     setProgress(p) {

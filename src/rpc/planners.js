@@ -3,6 +3,10 @@
 // (answer here), or { patch(result, ctx) } (forward, then merge fake data into
 // the result). Each plan reads the TokenState current at planning time, so a
 // request sees one consistent state even if it is swapped meanwhile.
+//
+// AA 00059 P7.1: { onlyIfNull: true, patch } is forwarded like PASS (a single request byte for byte);
+// `patch` returns the new result only when an account the upstream says does not exist is a metadata
+// fill-in, else null, and the upstream's answer is returned untouched.
 
 const { tokenAmount } = require('../amounts');
 const { uiAccount, keyedAccount, matchesFilters } = require('./encoding');
@@ -13,18 +17,34 @@ const withCtx = (ctx, value) => ({ context: ctx, value });
 
 const planners = {
   getAccountInfo(fake, [pubkey, cfg]) {
-    if (!fake.accounts.has(pubkey)) return PASS;
-    return { local: (ctx) => withCtx(ctx, uiAccount(fake.accounts.get(pubkey), cfg)) };
+    if (fake.accounts.has(pubkey)) return { local: (ctx) => withCtx(ctx, uiAccount(fake.accounts.get(pubkey), cfg)) };
+    const fill = fake.fillIns && fake.fillIns.get(pubkey);
+    if (!fill) return PASS;
+    return {
+      onlyIfNull: true,
+      patch: (result) => (result && result.value === null ? { ...result, value: uiAccount(fill, cfg) } : null),
+    };
   },
 
   getMultipleAccounts(fake, [pubkeys, cfg]) {
-    if (!Array.isArray(pubkeys) || !pubkeys.some((k) => fake.accounts.has(k))) return PASS;
+    if (!Array.isArray(pubkeys)) return PASS;
+    const fills = fake.fillIns || new Map();
+    const hasFake = pubkeys.some((k) => fake.accounts.has(k));
+    if (!hasFake && !pubkeys.some((k) => fills.has(k))) return PASS;
     return {
+      onlyIfNull: !hasFake,
       patch(result) {
+        let changed = false;
         pubkeys.forEach((k, i) => {
-          if (fake.accounts.has(k)) result.value[i] = uiAccount(fake.accounts.get(k), cfg);
+          if (fake.accounts.has(k)) {
+            result.value[i] = uiAccount(fake.accounts.get(k), cfg);
+            changed = true;
+          } else if (fills.has(k) && result.value[i] === null) {
+            result.value[i] = uiAccount(fills.get(k), cfg);
+            changed = true;
+          }
         });
-        return result;
+        return changed ? result : null;
       },
     };
   },
