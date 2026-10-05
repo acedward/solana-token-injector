@@ -19,6 +19,7 @@ function answer(method, params, extra) {
     case 'getGenesisHash':
       return { result: extra.genesisHash };
     case 'getAccountInfo': {
+      if (extra.accounts.has(params[0])) return { result: { context: ctx, value: extra.accounts.get(params[0]) } };
       const m = extra.mints.get(params[0]);
       if (!m) return { result: { context: ctx, value: null } };
       return {
@@ -42,7 +43,7 @@ function answer(method, params, extra) {
     case 'getBalance':
       return { result: { context: ctx, value: 1000000000 } };
     case 'getMultipleAccounts':
-      return { result: { context: ctx, value: (params[0] || []).map(() => null) } };
+      return { result: { context: ctx, value: (params[0] || []).map((k) => extra.accounts.get(k) ?? null) } };
     case 'getTokenAccountsByOwner': {
       const [, filter = {}] = params;
       if (filter.mint) return { error: { code: -32602, message: 'Invalid param: could not find mint' } };
@@ -58,7 +59,7 @@ function answer(method, params, extra) {
 async function startMockUpstream() {
   const port = await freePort(2);
   const calls = [];
-  const extra = { genesisHash: GENESIS, mints: new Map(), down: false };
+  const extra = { genesisHash: GENESIS, mints: new Map(), accounts: new Map(), down: false };
   const server = http.createServer((req, res) => {
     if (extra.down) {
       res.writeHead(503, { 'content-type': 'text/plain' });
@@ -101,6 +102,10 @@ async function startMockUpstream() {
     },
     setDown(v) {
       extra.down = v;
+    },
+    /** AA 00059 P7: a raw account (base64 data) for getAccountInfo / getMultipleAccounts. */
+    setAccount(pubkey, { owner, data, lamports = 5616720 }) {
+      extra.accounts.set(pubkey, { data: [Buffer.from(data).toString('base64'), 'base64'], executable: false, lamports, owner, rentEpoch: 18446744073709551615n, space: data.length });
     },
     async close() {
       for (const c of wss.clients) c.terminate();

@@ -21,6 +21,27 @@ function createRpcHandler({ plan, upstream }) {
     const reqs = isBatch ? parsed : [parsed];
     const plans = reqs.map(plan);
 
+    // AA 00059 P7.1: a single request that may need a metadata fill-in is forwarded byte for byte, and
+    // its answer is returned untouched unless the account the upstream says does not exist is filled in.
+    if (!isBatch && plans[0] !== PASS && plans[0].onlyIfNull) {
+      const up = await upstream.post(bodyText);
+      let upParsed;
+      try {
+        upParsed = JSONbig.parse(up.text);
+      } catch {
+        return up;
+      }
+      const result = upParsed && upParsed.result;
+      const patched = result !== undefined && result !== null ? plans[0].patch(result) : null;
+      if (!patched) {
+        log.method(parsed, 'pass');
+        return up;
+      }
+      upstream.rememberContext(patched);
+      log.method(parsed, 'patched');
+      return { status: up.status, text: JSONbig.stringify({ ...upParsed, result: patched }) };
+    }
+
     // Fast path: a single request we don't touch is piped straight through.
     if (!isBatch && plans[0] === PASS) {
       log.method(parsed, 'pass');
@@ -53,8 +74,11 @@ function createRpcHandler({ plan, upstream }) {
         const p = plans[i];
         if (p !== PASS && p.patch && r.result !== undefined && r.result !== null) {
           try {
-            r.result = p.patch(r.result);
-            log.method(reqs[i], 'patched');
+            const out = p.patch(r.result);
+            if (out !== null && out !== undefined) {
+              r.result = out;
+              log.method(reqs[i], 'patched');
+            } else log.method(reqs[i], 'pass');
           } catch {
             log.method(reqs[i], 'pass');
           }

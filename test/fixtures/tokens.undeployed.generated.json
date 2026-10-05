@@ -1,0 +1,55 @@
+{
+  "network": "undeployed",
+  "note": "Genesis shielded token types of the local undeployed network, confirmed by the harness (lane A gate A1, 2026-10-03): each dev seed 00..01-00..03 holds 00..00 = 250000000000000 (5 x 5e13), 00..01 = 50000000000000 and 00..02 = 50000000000000. Names are local labels. Midnight has no on-chain decimals for shielded tokens; 6 follows the NIGHT/STAR convention. | AA 00057 owner-session quick fix 2026-10-05: + Night Market demo tokens (twUSDC 6, twBTC 8), bridged X/Y images; icons hosted at https://midnight-solana-token-icons.ac-edward.workers.dev",
+  "tokens": {
+    "0000000000000000000000000000000000000000000000000000000000000000": {
+      "name": "Midnight Test Token",
+      "symbol": "MNTT",
+      "decimals": 6,
+      "description": "Local undeployed network genesis shielded token (type 00..00), shown display-only by solana-token-injector",
+      "image": "https://midnight-solana-token-icons.ac-edward.workers.dev/midnight.png"
+    },
+    "0000000000000000000000000000000000000000000000000000000000000001": {
+      "name": "Midnight Alt Token 1",
+      "symbol": "MNA1",
+      "decimals": 6,
+      "description": "Local undeployed network genesis shielded token (type 00..01), shown display-only by solana-token-injector",
+      "image": "https://midnight-solana-token-icons.ac-edward.workers.dev/midnight.png"
+    },
+    "0000000000000000000000000000000000000000000000000000000000000002": {
+      "name": "Midnight Alt Token 2",
+      "symbol": "MNA2",
+      "decimals": 6,
+      "description": "Local undeployed network genesis shielded token (type 00..02), shown display-only by solana-token-injector",
+      "image": "https://midnight-solana-token-icons.ac-edward.workers.dev/midnight.png"
+    },
+    "a0e8fd27d163fdb27f2b909b5043a841d3d0f4b14837cc6612ad54a8329a1779": {
+      "name": "twUSDC (Midnight)",
+      "symbol": "twUSDC",
+      "decimals": 6,
+      "image": "https://midnight-solana-token-icons.ac-edward.workers.dev/twusdc.png",
+      "description": "Night Market local demo token twUSDC (mint-test-tokens), shown display-only by solana-token-injector"
+    },
+    "707675bfbc6465d81c49f507fb6d165cae455356184302c17a366975751df36e": {
+      "name": "twBTC (Midnight)",
+      "symbol": "twBTC",
+      "decimals": 8,
+      "image": "https://midnight-solana-token-icons.ac-edward.workers.dev/twbtc.png",
+      "description": "Night Market local demo token twBTC (mint-test-tokens), shown display-only by solana-token-injector"
+    },
+    "7dd5e9a76d69e9e9861e5ce60d053f892455d387fc7ea6ce186db25f4b9f0057": {
+      "name": "X (Midnight)",
+      "symbol": "mnX",
+      "decimals": 6,
+      "image": "https://midnight-solana-token-icons.ac-edward.workers.dev/x-midnight.png",
+      "description": "Bridged X on Midnight (00058 bridge), shown display-only"
+    },
+    "b439aad68dc31e60569626ae276d4f360a5c12aec91ffadf11bcf5038b932569": {
+      "name": "Y (Midnight)",
+      "symbol": "mnY",
+      "decimals": 6,
+      "image": "https://midnight-solana-token-icons.ac-edward.workers.dev/y-midnight.png",
+      "description": "Bridged Y on Midnight (00058 bridge), shown display-only"
+    }
+  }
+}

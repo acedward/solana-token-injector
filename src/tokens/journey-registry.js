@@ -5,7 +5,13 @@
 //   journey-tokens.<midnight-network>.json:
 //   {"midnightNetwork": "undeployed", "solanaGenesisHash": "<base58>",
 //    "tokens": [{"colour": "<64 hex>", "splMint": "<base58>", "bridgeContract": "<64 hex>",
-//                "bridgeProgram": "<base58>", "bridgeApi": "<origin>", "name": "X", "symbol": "X", "decimals": 6}]}
+//                "bridgeProgram": "<base58>", "bridgeApi": "<origin>", "name": "X", "symbol": "X", "decimals": 6,
+//                "image": "https://…/x-midnight.png", "splImage": "https://…/x.png"}]}       (images optional)
+//
+// AA 00059 P7 (owner, 00057 Q10): `image` is the icon of the Midnight half ("<name> (Midnight)"), used
+// when the injector's own token registry gives that colour none; `splImage` is the icon of the REAL SPL
+// token, which the RPC serves in a filled-in Metaplex metadata account when the upstream has none for
+// that mint (src/tokens/state.js addFillIn). Both are https URLs of at most 200 bytes.
 //
 // Read from config midnight.journeyRegistry (env JOURNEY_REGISTRY), separate from the injector's own
 // token registry (midnight.tokenRegistry, another schema). The injector reads midnightNetwork,
@@ -21,6 +27,18 @@ const { bridgedDisplay } = require('./display');
 
 const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 const HEX64 = /^[0-9a-f]{64}$/;
+const MAX_IMAGE_BYTES = 200;
+
+/** An optional icon URL: https, at most 200 bytes, printable ASCII. */
+function checkImage(v) {
+  if (v === undefined) return undefined;
+  if (typeof v !== 'string' || !v || Buffer.byteLength(v) > MAX_IMAGE_BYTES || !/^[\x21-\x7e]+$/.test(v)) return null;
+  try {
+    return new URL(v).protocol === 'https:' ? v : null;
+  } catch {
+    return null;
+  }
+}
 const SHAPE = 'a journey token registry is {"midnightNetwork", "solanaGenesisHash", "tokens": [{"colour", "splMint", "bridgeContract", "name", "symbol", "decimals", ...}]}';
 
 class JourneyRegistryError extends Error {
@@ -62,9 +80,22 @@ function parseJourneyRegistry(raw, { networkId, source = 'journey token registry
     if (typeof t.name !== 'string' || !t.name.trim()) fail(`${where}.name must be a non-empty string`);
     if (typeof t.symbol !== 'string' || !t.symbol) fail(`${where}.symbol must be a non-empty string`);
     if (!Number.isInteger(t.decimals) || t.decimals < 0 || t.decimals > 255) fail(`${where}.decimals must be an integer 0..255`);
+    const image = checkImage(t.image);
+    const splImage = checkImage(t.splImage);
+    if (image === null) fail(`${where}.image must be an https URL of at most ${MAX_IMAGE_BYTES} bytes`);
+    if (splImage === null) fail(`${where}.splImage must be an https URL of at most ${MAX_IMAGE_BYTES} bytes`);
     if (byColour.has(t.colour)) fail(`${where}.colour ${t.colour} is listed twice`);
     if (byMint.has(t.splMint)) fail(`${where}.splMint ${t.splMint} is listed twice`);
-    const entry = { colour: t.colour, splMint: t.splMint, bridgeContract: t.bridgeContract, name: t.name, symbol: t.symbol, decimals: t.decimals };
+    const entry = {
+      colour: t.colour,
+      splMint: t.splMint,
+      bridgeContract: t.bridgeContract,
+      name: t.name,
+      symbol: t.symbol,
+      decimals: t.decimals,
+      ...(image ? { image } : {}),
+      ...(splImage ? { splImage } : {}),
+    };
     byColour.set(t.colour, entry);
     byMint.set(t.splMint, entry);
   });
@@ -138,23 +169,32 @@ async function checkJourneyRegistry(reg, upstream, { deadlineMs = 60_000, retryM
   }
 }
 
-/** lookup(key) for the colours I-1 lists (shielded keys only): the I-4b display. */
+/** lookup(key) for the colours I-1 lists (shielded keys only): the I-4b display, and the I-1 image. */
 function journeyLookup(reg) {
   return (key) => {
     if (!reg || key.startsWith('u:')) return null;
     const e = reg.tokens.get(key);
-    return e ? bridgedDisplay(e) : null;
+    return e ? { ...bridgedDisplay(e), ...(e.image ? { image: e.image } : {}) } : null;
   };
 }
 
-/** I-1 over the injector's own registry for name, symbol, decimals, description (image and uri stay the registry's). */
+/** I-1 over the injector's own registry for name, symbol, decimals, description; image and uri stay the
+ *  registry's, and the I-1 image is used only when the registry gives none (P7.2). */
 function combineLookups(journey, registry) {
   return (key) => {
     const base = registry(key);
     const j = journey(key);
     if (!j) return base;
-    return { ...(base || {}), ...j };
+    const out = { ...(base || {}), ...j };
+    if (base && base.image) out.image = base.image;
+    return out;
   };
 }
 
-module.exports = { TOKEN_PROGRAM, JourneyRegistryError, parseJourneyRegistry, loadJourneyRegistry, checkJourneyRegistry, journeyLookup, combineLookups };
+/** The metadata fill-ins for the registry's real SPL mints (P7.1): {mint, name, symbol, image}. */
+function journeyFillIns(reg) {
+  if (!reg) return [];
+  return [...reg.tokens.values()].map((e) => ({ mint: e.splMint, name: e.name, symbol: e.symbol, ...(e.splImage ? { image: e.splImage } : {}) }));
+}
+
+module.exports = { TOKEN_PROGRAM, MAX_IMAGE_BYTES, JourneyRegistryError, parseJourneyRegistry, loadJourneyRegistry, checkJourneyRegistry, journeyLookup, combineLookups, journeyFillIns };

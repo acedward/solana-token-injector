@@ -132,6 +132,29 @@ reloaded when it changes:
 
 `name` ≤ 32 bytes, `symbol` ≤ 10 bytes (Metaplex limits), `decimals` 0–255,
 optional `image`, `description`, and `uri` (your own metadata JSON, ≤ 200 bytes).
+An optional `unshielded` object (same shape as `tokens`) names unshielded token
+types (Passport accounts' public balances). Other top-level fields (a `note`,
+say) are ignored.
+
+A file generated from Night Market's token list loads unchanged through
+`TOKEN_REGISTRY` (or `midnight.tokenRegistry`): one entry per Midnight token
+type with its real decimals and an icon, for example
+
+```json
+{
+  "network": "undeployed",
+  "tokens": {
+    "<twBTC's 64-hex type>": { "name": "twBTC (Midnight)", "symbol": "twBTC", "decimals": 8,
+                              "image": "https://…/twbtc.png" },
+    "<twUSDC's 64-hex type>": { "name": "twUSDC (Midnight)", "symbol": "twUSDC", "decimals": 6,
+                               "image": "https://…/twusdc.png" }
+  }
+}
+```
+
+With 8 decimals, 10,000,000 base units of twBTC show as 0.1. A type the file
+does not name falls back to 6 decimals and a generated name, so every token
+Night Market can hold should be listed.
 
 ### API
 
@@ -278,6 +301,36 @@ decimals (it retries for up to 60 s while the upstream is unreachable, then
 exits). An invalid edit of the file while running is logged and the previous
 file kept.
 
+Icons: an entry may carry `image` (the icon of "<name> (Midnight)", used when
+the token registry file gives that type none) and `splImage` (the icon of the
+real SPL token). Both are optional `https` URLs of at most 200 bytes; other
+fields of an entry are ignored.
+
+```json
+{"colour": "<64 hex>", "splMint": "<base58>", "bridgeContract": "<64 hex>",
+ "name": "X", "symbol": "X", "decimals": 6,
+ "image": "https://…/x-midnight.png", "splImage": "https://…/x.png"}
+```
+
+**Metadata fill-in for the real SPL tokens.** A local or new SPL mint often has
+no Metaplex metadata account, and wallets then show only its address. For the
+SPL mints the journey token registry lists, and **only when the upstream says
+the mint's Metaplex metadata account does not exist**, the RPC answers that
+account itself (`getAccountInfo` and `getMultipleAccounts`): name and symbol
+from the registry entry, a `uri` pointing at this service's
+`/token-metadata/spl:<mint>.json`, whose `image` is the entry's `splImage`.
+It never touches the mint, its token accounts or balances, and a mint that has
+real metadata upstream gets the upstream's answer byte for byte (the request is
+forwarded unchanged and its answer is rewritten only for an account the
+upstream reports as missing). This is the one place the injector shows data
+for a real token that is not on chain (the owner's choice, 2026-10-05); remove
+the mint from the registry to turn it off.
+
+**Wallet caching:** Nightly loads a newly appeared token's name and icon only
+after it is reopened (seen in the owner's session on 2026-10-05): after a
+registration, a new bridged token or a registry edit, close and reopen the
+wallet (or switch its RPC away and back) to see the new names and icons.
+
 ### Turning it off
 
 The account source is **on by default** whenever `midnight` is configured. It
@@ -354,8 +407,8 @@ mint and token account addresses.
 | RPC method | Behavior |
 |---|---|
 | `getTokenAccountsByOwner` | Fake token account appended when the owner and program match. Filtering by the fake mint is answered by the proxy, because the upstream would reject an unknown mint |
-| `getAccountInfo` | Answered by the proxy for the fake mint, token accounts and Metaplex metadata account |
-| `getMultipleAccounts` | Forwarded, then the fake accounts' slots filled in |
+| `getAccountInfo` | Answered by the proxy for the fake mint, token accounts and Metaplex metadata account. For the Metaplex metadata account of a journey-registry SPL mint: forwarded, and filled in only when the upstream says it does not exist |
+| `getMultipleAccounts` | Forwarded, then the fake accounts' slots filled in (and a registry SPL mint's missing metadata account) |
 | `getProgramAccounts` | Fake accounts appended when they pass the request's `dataSize`/`memcmp` filters |
 | `getTokenAccountBalance`, `getTokenSupply`, `getTokenLargestAccounts` | Answered by the proxy for the fake token |
 | everything else, including `sendTransaction` and websocket subscriptions | Passed through untouched |

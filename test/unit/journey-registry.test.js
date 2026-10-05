@@ -79,3 +79,24 @@ test('lookup: I-1 (I-4b) over the token registry for name, symbol, decimals; ima
   assert.equal(lookup(`u:${C1}`), null);
   assert.equal(lookup('33'.repeat(32)), null);
 });
+
+test('P7.2 I-1 images: optional https URLs of at most 200 bytes; the registry image wins, the I-1 image fills a gap; fill-ins carry splImage', () => {
+  const img = 'https://midnight-solana-token-icons.ac-edward.workers.dev/x-midnight.png';
+  const spl = 'https://midnight-solana-token-icons.ac-edward.workers.dev/x.png';
+  const reg = j.parseJourneyRegistry(file([entry({ image: img, splImage: spl })]), { networkId: 'undeployed' });
+  assert.equal(reg.tokens.get(C1).image, img);
+  assert.equal(reg.tokens.get(C1).splImage, spl);
+  for (const [field, v] of [['image', 'http://x/a.png'], ['image', `https://x/${'a'.repeat(200)}.png`], ['splImage', 42], ['splImage', 'https://x/a b.png'], ['image', '']]) {
+    assert.throws(() => j.parseJourneyRegistry(file([entry({ [field]: v })]), { networkId: 'undeployed' }), new RegExp(`tokens\\[0\\]\\.${field} must be an https URL`));
+  }
+  const noImageRegistry = (k) => (k === C1 ? { name: 'Old', symbol: 'OLD', decimals: 6 } : null);
+  const withImageRegistry = (k) => (k === C1 ? { name: 'Old', symbol: 'OLD', decimals: 6, image: 'https://registry/x.png' } : null);
+  assert.equal(j.combineLookups(j.journeyLookup(reg), noImageRegistry)(C1).image, img);
+  assert.equal(j.combineLookups(j.journeyLookup(reg), withImageRegistry)(C1).image, 'https://registry/x.png');
+  assert.equal(j.combineLookups(j.journeyLookup(reg), () => null)(C1).image, img);
+  assert.deepEqual(j.journeyFillIns(reg), [{ mint: mintA, name: 'Test X', symbol: 'X', image: spl }]);
+  const bare = j.parseJourneyRegistry(file([entry()]), { networkId: 'undeployed' });
+  assert.deepEqual(j.journeyFillIns(bare), [{ mint: mintA, name: 'Test X', symbol: 'X' }]);
+  assert.equal('image' in j.combineLookups(j.journeyLookup(bare), noImageRegistry)(C1), false);
+  assert.deepEqual(j.journeyFillIns(null), []);
+});
